@@ -1,6 +1,7 @@
 use krafted_back::router::create_router;
 use krafted_back::shared::config::Config;
 use krafted_back::shared::db::{establish_pool, run_migrations};
+use krafted_back::user::UserAppState;
 use std::net::SocketAddr;
 
 #[tokio::main]
@@ -15,7 +16,8 @@ async fn main() {
     let pool = establish_pool(&config.database.url, config.database.pool_size);
     run_migrations(&pool);
 
-    let app = create_router();
+    let state = UserAppState::new(pool.clone());
+    let app = create_router().with_state(state);
 
     let addr = SocketAddr::from((
         config.server.host.parse::<std::net::IpAddr>().unwrap(),
