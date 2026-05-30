@@ -21,6 +21,7 @@ async fn test_create_user() {
     let new_user = NewUser {
         email: "test@example.com".to_string(),
         name: "Test User".to_string(),
+        password_hash: String::new(),
     };
     let created = repo.create(new_user).await.unwrap();
     assert_eq!(created.email, "test@example.com");
@@ -34,12 +35,14 @@ async fn test_create_duplicate_user_returns_bad_request() {
     let new_user = NewUser {
         email: email.clone(),
         name: "First".to_string(),
+        password_hash: String::new(),
     };
     repo.create(new_user).await.unwrap();
 
     let duplicate = NewUser {
         email,
         name: "Second".to_string(),
+        password_hash: String::new(),
     };
     let result = repo.create(duplicate).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));

@@ -23,6 +23,7 @@ fn fake_user() -> User {
         name: "Test".to_string(),
         created_at: NaiveDateTime::default(),
         updated_at: NaiveDateTime::default(),
+        password_hash: String::new(),
     }
 }
 
