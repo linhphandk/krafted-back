@@ -233,3 +233,81 @@ async fn test_logout_e2e() {
 
     assert_eq!(logout_response.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn test_refresh_token_e2e() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker);
+
+    app.clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/auth/register")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(
+                    serde_json::to_string(&json!({
+                        "email": "refresh@example.com",
+                        "name": "Refresh",
+                        "password": "password123"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let login_response = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/auth/login")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(
+                    serde_json::to_string(&json!({
+                        "email": "refresh@example.com",
+                        "password": "password123"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(login_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let refresh_token = json["refresh_token"].as_str().unwrap().to_string();
+
+    let refresh_response = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/auth/refresh")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(
+                    serde_json::to_string(&json!({
+                        "refresh_token": refresh_token
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(refresh_response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(refresh_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let new_access_token = json["access_token"].as_str().unwrap().to_string();
+    let new_refresh_token = json["refresh_token"].as_str().unwrap().to_string();
+    assert!(!new_access_token.is_empty());
+    assert!(!new_refresh_token.is_empty());
+}

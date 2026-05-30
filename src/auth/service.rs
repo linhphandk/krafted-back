@@ -94,4 +94,48 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
     pub async fn logout(&self, refresh_token: String) -> AppResult<()> {
         self.session_repo.revoke(&refresh_token).await
     }
+
+    pub async fn refresh_token(&self, refresh_token: String) -> AppResult<(User, Tokens)> {
+        let session = self.session_repo.find_by_token(&refresh_token).await?;
+        let session = session.ok_or(AppError::BadRequest("Invalid refresh token".to_string()))?;
+
+        if session.expires_at < Utc::now().naive_utc() {
+            self.session_repo.revoke(&refresh_token).await?;
+            return Err(AppError::BadRequest("Refresh token expired".to_string()));
+        }
+
+        let user = self.user_repo.find_by_id(session.user_id).await?;
+        let user = user.ok_or(AppError::Internal)?;
+
+        let new_access_token = self
+            .auth_provider
+            .generate_access_token(&user.id.to_string(), &user.email)
+            .await?;
+
+        self.session_repo.revoke(&refresh_token).await?;
+
+        let new_refresh_token = Uuid::new_v4().to_string();
+        let expires_at = Utc::now()
+            .checked_add_signed(Duration::days(self.refresh_token_expiry_days))
+            .ok_or(AppError::Internal)?
+            .naive_utc();
+
+        let new_session = self
+            .session_repo
+            .create(NewSession {
+                user_id: user.id,
+                refresh_token: new_refresh_token.clone(),
+                expires_at,
+            })
+            .await?;
+
+        let tokens = Tokens {
+            access_token: new_access_token,
+            refresh_token: new_session.refresh_token,
+            id_token: String::new(),
+            expires_in: self.auth_provider.token_expiry_seconds(),
+        };
+
+        Ok((user, tokens))
+    }
 }

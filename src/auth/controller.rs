@@ -130,3 +130,44 @@ pub async fn logout(
     state.auth_service.logout(req.refresh_token).await?;
     Ok(StatusCode::OK)
 }
+
+#[derive(Deserialize, ToSchema)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
+}
+
+#[derive(serde::Serialize, ToSchema)]
+pub struct RefreshResponse {
+    pub user: UserResponse,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: u64,
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    request_body = RefreshRequest,
+    responses(
+        (status = 200, description = "Token refreshed", body = RefreshResponse),
+        (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
+    ),
+    tag = "auth",
+)]
+pub async fn refresh(
+    State(state): State<AppState>,
+    Json(req): Json<RefreshRequest>,
+) -> AppResult<(StatusCode, Json<RefreshResponse>)> {
+    let (user, tokens) = state.auth_service.refresh_token(req.refresh_token).await?;
+    let response = RefreshResponse {
+        user: UserResponse {
+            id: user.id.to_string(),
+            email: user.email,
+            name: user.name,
+        },
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_in: tokens.expires_in,
+    };
+    Ok((StatusCode::OK, Json(response)))
+}
