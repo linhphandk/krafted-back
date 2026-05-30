@@ -1,23 +1,26 @@
-use diesel::prelude::*;
-use krafted_back::shared::db::establish_pool;
+use krafted_back::shared::db::{establish_pool, run_migrations};
 use krafted_back::shared::errors::AppError;
 use krafted_back::user::models::NewUser;
 use krafted_back::user::ports::UserRepository;
 use krafted_back::user::repository::DieselUserRepository;
+use testcontainers::clients::Cli;
+use testcontainers_modules::postgres::Postgres;
 
-fn setup_repository() -> DieselUserRepository {
-    let db_url = "postgres://krafted:krafted@localhost:5432/krafted";
-    let pool = establish_pool(db_url, 4);
-    let mut conn = pool.get().expect("Failed to get connection");
-    diesel::sql_query("DELETE FROM users")
-        .execute(&mut conn)
-        .ok();
-    DieselUserRepository::new(pool)
+fn setup_repository(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, DieselUserRepository) {
+    let container = docker.run(Postgres::default());
+    let port = container.get_host_port_ipv4(5432);
+    let db_url = format!("postgres://postgres:postgres@localhost:{}/postgres", port);
+    let pool = establish_pool(&db_url, 4);
+    run_migrations(&pool);
+    let repo = DieselUserRepository::new(pool);
+    (container, repo)
 }
 
 #[tokio::test]
 async fn test_create_user() {
-    let repo = setup_repository();
+    let docker = Cli::default();
+    let (_container, repo) = setup_repository(&docker);
+
     let new_user = NewUser {
         email: "test@example.com".to_string(),
         name: "Test User".to_string(),
@@ -30,7 +33,9 @@ async fn test_create_user() {
 
 #[tokio::test]
 async fn test_create_duplicate_user_returns_bad_request() {
-    let repo = setup_repository();
+    let docker = Cli::default();
+    let (_container, repo) = setup_repository(&docker);
+
     let email = format!("dup-{}@example.com", uuid::Uuid::new_v4());
     let new_user = NewUser {
         email: email.clone(),
