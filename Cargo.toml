@@ -29,3 +29,4 @@ utoipa-swagger-ui = { version = "8", features = ["axum"] }
 tokio-test = "0.4"
 testcontainers = "0.15"
 testcontainers-modules = { version = "0.3", features = ["postgres"] }
+tower = "0.5"
