@@ -4,6 +4,8 @@ use axum::Json;
 use serde::Serialize;
 use thiserror::Error;
 
+pub type AppResult<T> = Result<T, AppError>;
+
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("Database error: {0}")]

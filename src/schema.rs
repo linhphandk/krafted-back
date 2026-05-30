@@ -1,2 +1,11 @@
 // @generated automatically by Diesel CLI.
-// Tables will be added in later milestones.
+
+diesel::table! {
+    users (id) {
+        id -> Uuid,
+        email -> Varchar,
+        name -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
