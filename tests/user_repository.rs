@@ -52,3 +52,30 @@ async fn test_create_duplicate_user_returns_bad_request() {
     let result = repo.create(duplicate).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
+
+#[tokio::test]
+async fn test_find_by_email_returns_user() {
+    let docker = Cli::default();
+    let (_container, repo) = setup_repository(&docker);
+
+    let email = "find@example.com".to_string();
+    let new_user = NewUser {
+        email: email.clone(),
+        name: "Find Me".to_string(),
+        password_hash: String::new(),
+    };
+    repo.create(new_user).await.unwrap();
+
+    let found = repo.find_by_email(&email).await.unwrap();
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().email, email);
+}
+
+#[tokio::test]
+async fn test_find_by_email_returns_none() {
+    let docker = Cli::default();
+    let (_container, repo) = setup_repository(&docker);
+
+    let found = repo.find_by_email("nope@example.com").await.unwrap();
+    assert!(found.is_none());
+}
