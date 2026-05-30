@@ -1,10 +1,12 @@
-use axum::extract::State;
+use axum::extract::{Extension, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::shared::errors::AppResult;
+use crate::shared::types::AuthenticatedUser;
 use crate::state::AppState;
 
 #[derive(Deserialize, ToSchema)]
@@ -79,7 +81,25 @@ pub async fn register(
         access_token: tokens.access_token,
         expires_in: tokens.expires_in,
     };
-    Ok((StatusCode::CREATED, Json(response)))
+    Ok((StatusCode::OK, Json(response)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/auth/me",
+    responses(
+        (status = 200, description = "Current user info", body = UserResponse),
+        (status = 401, description = "Unauthorized"),
+    ),
+    tag = "auth",
+)]
+pub async fn me(Extension(user): Extension<AuthenticatedUser>) -> impl IntoResponse {
+    let response = UserResponse {
+        id: user.id.to_string(),
+        email: user.email,
+        name: user.name,
+    };
+    (StatusCode::OK, Json(response))
 }
 
 #[utoipa::path(
