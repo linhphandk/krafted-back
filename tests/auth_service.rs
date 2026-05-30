@@ -276,3 +276,43 @@ async fn test_refresh_token_expired() {
     let result = service.refresh_token("expired".to_string()).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
+
+#[tokio::test]
+async fn test_get_current_user_success() {
+    let mut mock_auth = MockMockAuthProvider::new();
+    mock_auth
+        .expect_introspect_token()
+        .returning(|_| Ok(fake_user_info()));
+
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo
+        .expect_find_by_email()
+        .returning(|_| Ok(Some(fake_user())));
+
+    let service = AuthService::new(
+        mock_auth,
+        mock_repo,
+        MockMockSessionRepo::new(),
+        7,
+    );
+    let result = service.get_current_user("valid-jwt".to_string()).await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().email, "test@example.com");
+}
+
+#[tokio::test]
+async fn test_get_current_user_invalid_token() {
+    let mut mock_auth = MockMockAuthProvider::new();
+    mock_auth
+        .expect_introspect_token()
+        .returning(|_| Err(AppError::BadRequest("Invalid token".to_string())));
+
+    let service = AuthService::new(
+        mock_auth,
+        MockMockUserRepo::new(),
+        MockMockSessionRepo::new(),
+        7,
+    );
+    let result = service.get_current_user("bad".to_string()).await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}

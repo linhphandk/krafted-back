@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use jsonwebtoken::{encode, EncodingKey, Header};
-use serde::Serialize;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
 
 use crate::auth::models::{Tokens, UserInfo};
 use crate::auth::ports::AuthProvider;
@@ -13,7 +13,7 @@ pub struct LocalAuthProvider {
     jwt_expiry_minutes: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct Claims {
     sub: String,
     email: String,
@@ -114,8 +114,23 @@ impl AuthProvider for LocalAuthProvider {
         Ok((tokens, user_info))
     }
 
-    async fn introspect_token(&self, _token: &str) -> AppResult<UserInfo> {
-        Err(AppError::NotImplemented)
+    async fn introspect_token(&self, token: &str) -> AppResult<UserInfo> {
+        let token_data = decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(self.jwt_secret.as_bytes()),
+            &Validation::default(),
+        )
+        .map_err(|e| {
+            tracing::error!("JWT decode error: {:?}", e);
+            AppError::BadRequest("Invalid token".to_string())
+        })?;
+
+        Ok(UserInfo {
+            sub: token_data.claims.sub,
+            email: token_data.claims.email,
+            name: String::new(),
+            password_hash: String::new(),
+        })
     }
 
     async fn refresh_token(&self, _refresh_token: &str) -> AppResult<Tokens> {

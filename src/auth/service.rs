@@ -138,4 +138,10 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
 
         Ok((user, tokens))
     }
+
+    pub async fn get_current_user(&self, access_token: String) -> AppResult<User> {
+        let user_info = self.auth_provider.introspect_token(&access_token).await?;
+        let user = self.user_repo.find_by_email(&user_info.email).await?;
+        user.ok_or(AppError::BadRequest("User not found".to_string()))
+    }
 }
