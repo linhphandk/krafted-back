@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel::result::DatabaseErrorKind;
+use uuid::Uuid;
 
 use crate::schema::users;
 use crate::shared::db::DbPool;
@@ -51,6 +52,21 @@ impl UserRepository for DieselUserRepository {
         })?;
         users::table
             .filter(users::email.eq(email))
+            .first::<User>(&mut conn)
+            .optional()
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>> {
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        users::table
+            .filter(users::id.eq(id))
             .first::<User>(&mut conn)
             .optional()
             .map_err(|e| {

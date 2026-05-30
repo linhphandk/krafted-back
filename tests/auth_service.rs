@@ -21,6 +21,8 @@ mock! {
         async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
         async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
         async fn revoke_token(&self, token: &str) -> AppResult<()>;
+        async fn generate_access_token(&self, user_id: &str, email: &str) -> AppResult<String>;
+        fn token_expiry_seconds(&self) -> u64;
     }
 }
 
@@ -31,6 +33,7 @@ mock! {
     impl UserRepository for MockUserRepo {
         async fn create(&self, user: NewUser) -> AppResult<User>;
         async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
+        async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>>;
     }
 }
 
@@ -196,4 +199,80 @@ async fn test_logout_success() {
     );
     let result = service.logout("test-refresh".to_string()).await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_refresh_token_success() {
+    let mut mock_auth = MockMockAuthProvider::new();
+    mock_auth
+        .expect_generate_access_token()
+        .returning(|_, _| Ok("new-jwt".to_string()));
+    mock_auth
+        .expect_token_expiry_seconds()
+        .returning(|| 900);
+
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo
+        .expect_find_by_id()
+        .returning(|_| Ok(Some(fake_user())));
+
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session
+        .expect_find_by_token()
+        .returning(|_| {
+            let mut s = fake_session();
+            s.expires_at = chrono::Utc::now()
+                .checked_add_signed(chrono::Duration::days(7))
+                .unwrap()
+                .naive_utc();
+            Ok(Some(s))
+        });
+    mock_session.expect_revoke().returning(|_| Ok(())).times(1);
+    mock_session.expect_create().returning(|_| Ok(fake_session()));
+
+    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7);
+    let result = service.refresh_token("old-refresh".to_string()).await;
+    assert!(result.is_ok());
+    let (user, tokens) = result.unwrap();
+    assert_eq!(user.email, "test@example.com");
+    assert_eq!(tokens.access_token, "new-jwt");
+    assert!(!tokens.refresh_token.is_empty());
+}
+
+#[tokio::test]
+async fn test_refresh_token_invalid() {
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session.expect_find_by_token().returning(|_| Ok(None));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        mock_session,
+        7,
+    );
+    let result = service.refresh_token("bad".to_string()).await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_refresh_token_expired() {
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session.expect_find_by_token().returning(|_| {
+        let mut s = fake_session();
+        s.expires_at = chrono::Utc::now()
+            .checked_sub_signed(chrono::Duration::days(1))
+            .unwrap()
+            .naive_utc();
+        Ok(Some(s))
+    });
+    mock_session.expect_revoke().returning(|_| Ok(())).times(1);
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        mock_session,
+        7,
+    );
+    let result = service.refresh_token("expired".to_string()).await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
 }

@@ -125,6 +125,14 @@ impl AuthProvider for LocalAuthProvider {
     async fn revoke_token(&self, _token: &str) -> AppResult<()> {
         Err(AppError::NotImplemented)
     }
+
+    async fn generate_access_token(&self, user_id: &str, email: &str) -> AppResult<String> {
+        self.generate_access_token(user_id, email)
+    }
+
+    fn token_expiry_seconds(&self) -> u64 {
+        self.jwt_expiry_minutes * 60
+    }
 }
 
 #[cfg(test)]

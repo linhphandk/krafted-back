@@ -14,4 +14,8 @@ pub trait AuthProvider: Send + Sync {
     async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
 
     async fn revoke_token(&self, token: &str) -> AppResult<()>;
+
+    async fn generate_access_token(&self, user_id: &str, email: &str) -> AppResult<String>;
+
+    fn token_expiry_seconds(&self) -> u64;
 }
