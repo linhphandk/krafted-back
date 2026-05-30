@@ -35,12 +35,12 @@ impl<A: AuthProvider, R: UserRepository> AuthService<A, R> {
             ));
         }
 
-        let _user_info = self.auth_provider.register(&email, &name, &password).await?;
+        let user_info = self.auth_provider.register(&email, &name, &password).await?;
 
         let new_user = NewUser {
             email,
             name,
-            password_hash: String::new(),
+            password_hash: user_info.password_hash,
         };
 
         self.user_repo.create(new_user).await

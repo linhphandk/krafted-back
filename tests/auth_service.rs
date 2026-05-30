@@ -47,6 +47,7 @@ fn fake_user_info() -> UserInfo {
         sub: "1".to_string(),
         email: "test@example.com".to_string(),
         name: "Test".to_string(),
+        password_hash: "$2b$12$hashed".to_string(),
     }
 }
 
