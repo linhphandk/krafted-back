@@ -85,8 +85,33 @@ impl AuthProvider for LocalAuthProvider {
         Ok((user_info, tokens))
     }
 
-    async fn login(&self, _email: &str, _password: &str) -> AppResult<(Tokens, UserInfo)> {
-        Err(AppError::NotImplemented)
+    async fn login(&self, email: &str, password: &str, password_hash: &str) -> AppResult<(Tokens, UserInfo)> {
+        let valid = bcrypt::verify(password, password_hash).map_err(|e| {
+            tracing::error!("Password verification error: {:?}", e);
+            AppError::Internal
+        })?;
+
+        if !valid {
+            return Err(AppError::BadRequest("Invalid email or password".to_string()));
+        }
+
+        let access_token = self.generate_access_token(email, email)?;
+
+        let tokens = Tokens {
+            access_token,
+            refresh_token: String::new(),
+            id_token: String::new(),
+            expires_in: self.jwt_expiry_minutes * 60,
+        };
+
+        let user_info = UserInfo {
+            sub: email.to_string(),
+            email: email.to_string(),
+            name: String::new(),
+            password_hash: password_hash.to_string(),
+        };
+
+        Ok((tokens, user_info))
     }
 
     async fn introspect_token(&self, _token: &str) -> AppResult<UserInfo> {

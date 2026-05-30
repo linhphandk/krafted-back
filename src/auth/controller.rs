@@ -18,6 +18,53 @@ pub struct RegisterRequest {
 }
 
 #[derive(serde::Serialize, ToSchema)]
+pub struct LoginResponse {
+    pub user: UserResponse,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: u64,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct LoginRequest {
+    #[schema(example = "user@example.com")]
+    pub email: String,
+    #[schema(example = "securepassword123")]
+    pub password: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
+    ),
+    tag = "auth",
+)]
+pub async fn login(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> AppResult<(StatusCode, Json<LoginResponse>)> {
+    let (user, tokens) = state
+        .auth_service
+        .login(req.email, req.password)
+        .await?;
+    let response = LoginResponse {
+        user: UserResponse {
+            id: user.id.to_string(),
+            email: user.email,
+            name: user.name,
+        },
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_in: tokens.expires_in,
+    };
+    Ok((StatusCode::OK, Json(response)))
+}
+
+#[derive(serde::Serialize, ToSchema)]
 pub struct RegisterResponse {
     pub user: UserResponse,
     pub access_token: String,

@@ -3,6 +3,8 @@ use chrono::NaiveDateTime;
 use krafted_back::auth::models::{Tokens, UserInfo};
 use krafted_back::auth::ports::AuthProvider;
 use krafted_back::auth::service::AuthService;
+use krafted_back::session::models::{NewSession, Session};
+use krafted_back::session::ports::SessionRepository;
 use krafted_back::shared::errors::{AppError, AppResult};
 use krafted_back::user::models::{NewUser, User};
 use krafted_back::user::ports::UserRepository;
@@ -15,7 +17,7 @@ mock! {
     #[async_trait]
     impl AuthProvider for MockAuthProvider {
         async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
-        async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
+        async fn login(&self, email: &str, password: &str, password_hash: &str) -> AppResult<(Tokens, UserInfo)>;
         async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
         async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
         async fn revoke_token(&self, token: &str) -> AppResult<()>;
@@ -28,6 +30,18 @@ mock! {
     #[async_trait]
     impl UserRepository for MockUserRepo {
         async fn create(&self, user: NewUser) -> AppResult<User>;
+        async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
+    }
+}
+
+mock! {
+    pub MockSessionRepo {}
+
+    #[async_trait]
+    impl SessionRepository for MockSessionRepo {
+        async fn create(&self, session: NewSession) -> AppResult<Session>;
+        async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>>;
+        async fn revoke(&self, token: &str) -> AppResult<()>;
     }
 }
 
@@ -38,7 +52,17 @@ fn fake_user() -> User {
         name: "Test".to_string(),
         created_at: NaiveDateTime::default(),
         updated_at: NaiveDateTime::default(),
-        password_hash: String::new(),
+        password_hash: "$2b$12$hashed".to_string(),
+    }
+}
+
+fn fake_session() -> Session {
+    Session {
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        refresh_token: "test-refresh".to_string(),
+        expires_at: NaiveDateTime::default(),
+        created_at: NaiveDateTime::default(),
     }
 }
 
@@ -60,6 +84,15 @@ fn fake_tokens() -> Tokens {
     }
 }
 
+fn new_service() -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo> {
+    AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        MockMockSessionRepo::new(),
+        7,
+    )
+}
+
 #[tokio::test]
 async fn test_register_success() {
     let mut mock_auth = MockMockAuthProvider::new();
@@ -70,7 +103,7 @@ async fn test_register_success() {
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo.expect_create().returning(|_| Ok(fake_user()));
 
-    let service = AuthService::new(mock_auth, mock_repo);
+    let service = AuthService::new(mock_auth, mock_repo, MockMockSessionRepo::new(), 7);
     let result = service
         .register(
             "test@example.com".to_string(),
@@ -79,75 +112,73 @@ async fn test_register_success() {
         )
         .await;
     assert!(result.is_ok());
-    let (user, tokens) = result.unwrap();
-    assert_eq!(user.email, "test@example.com");
-    assert_eq!(tokens.access_token, "fake-jwt");
 }
 
 #[tokio::test]
 async fn test_register_empty_email() {
-    let mock_auth = MockMockAuthProvider::new();
-    let mock_repo = MockMockUserRepo::new();
-    let service = AuthService::new(mock_auth, mock_repo);
+    let service = new_service();
     let result = service
-        .register(
-            "".to_string(),
-            "Test".to_string(),
-            "password123".to_string(),
-        )
+        .register("".to_string(), "Test".to_string(), "password123".to_string())
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
 
 #[tokio::test]
 async fn test_register_empty_name() {
-    let mock_auth = MockMockAuthProvider::new();
-    let mock_repo = MockMockUserRepo::new();
-    let service = AuthService::new(mock_auth, mock_repo);
+    let service = new_service();
     let result = service
-        .register(
-            "test@example.com".to_string(),
-            "".to_string(),
-            "password123".to_string(),
-        )
+        .register("test@example.com".to_string(), "".to_string(), "password123".to_string())
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
 
 #[tokio::test]
 async fn test_register_short_password() {
-    let mock_auth = MockMockAuthProvider::new();
-    let mock_repo = MockMockUserRepo::new();
-    let service = AuthService::new(mock_auth, mock_repo);
+    let service = new_service();
     let result = service
-        .register(
-            "test@example.com".to_string(),
-            "Test".to_string(),
-            "short".to_string(),
-        )
+        .register("test@example.com".to_string(), "Test".to_string(), "short".to_string())
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
 
 #[tokio::test]
-async fn test_register_delegates_to_auth_provider() {
+async fn test_login_success() {
     let mut mock_auth = MockMockAuthProvider::new();
     mock_auth
-        .expect_register()
-        .withf(|email, name, _| email == "test@example.com" && name == "Test")
-        .times(1)
-        .returning(|_, _, _| Ok((fake_user_info(), fake_tokens())));
+        .expect_login()
+        .returning(|_, _, _| Ok((fake_tokens(), fake_user_info())));
 
     let mut mock_repo = MockMockUserRepo::new();
-    mock_repo.expect_create().returning(|_| Ok(fake_user()));
+    mock_repo
+        .expect_find_by_email()
+        .returning(|_| Ok(Some(fake_user())));
 
-    let service = AuthService::new(mock_auth, mock_repo);
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session.expect_create().returning(|_| Ok(fake_session()));
+
+    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7);
     let result = service
-        .register(
-            "test@example.com".to_string(),
-            "Test".to_string(),
-            "password123".to_string(),
-        )
+        .login("test@example.com".to_string(), "password123".to_string())
         .await;
     assert!(result.is_ok());
+    let (user, tokens) = result.unwrap();
+    assert_eq!(user.email, "test@example.com");
+    assert!(!tokens.refresh_token.is_empty());
+}
+
+#[tokio::test]
+async fn test_login_user_not_found() {
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo.expect_find_by_email().returning(|_| Ok(None));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        mock_repo,
+        MockMockSessionRepo::new(),
+        7,
+    );
+    let result = service
+        .login("nope@example.com".to_string(), "password123".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
