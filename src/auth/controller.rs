@@ -1,21 +1,23 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::shared::errors::AppResult;
-use crate::user::UserAppState;
+use crate::state::AppState;
 
 #[derive(Deserialize, ToSchema)]
-pub struct CreateUserRequest {
+pub struct RegisterRequest {
     #[schema(example = "user@example.com")]
     pub email: String,
     #[schema(example = "John Doe")]
     pub name: String,
+    #[schema(example = "securepassword123")]
+    pub password: String,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(serde::Serialize, ToSchema)]
 pub struct UserResponse {
     pub id: String,
     pub email: String,
@@ -24,19 +26,22 @@ pub struct UserResponse {
 
 #[utoipa::path(
     post,
-    path = "/users",
-    request_body = CreateUserRequest,
+    path = "/auth/register",
+    request_body = RegisterRequest,
     responses(
-        (status = 201, description = "User created", body = UserResponse),
+        (status = 201, description = "User registered", body = UserResponse),
         (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
     ),
-    tag = "users",
+    tag = "auth",
 )]
-pub async fn create_user(
-    State(state): State<UserAppState>,
-    Json(req): Json<CreateUserRequest>,
+pub async fn register(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterRequest>,
 ) -> AppResult<(StatusCode, Json<UserResponse>)> {
-    let user = state.service.create_user(req.email, req.name).await?;
+    let user = state
+        .auth_service
+        .register(req.email, req.name, req.password)
+        .await?;
     let response = UserResponse {
         id: user.id.to_string(),
         email: user.email,
