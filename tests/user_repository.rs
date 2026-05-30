@@ -30,14 +30,15 @@ async fn test_create_user() {
 #[tokio::test]
 async fn test_create_duplicate_user_returns_bad_request() {
     let repo = setup_repository();
+    let email = format!("dup-{}@example.com", uuid::Uuid::new_v4());
     let new_user = NewUser {
-        email: "duplicate@example.com".to_string(),
+        email: email.clone(),
         name: "First".to_string(),
     };
     repo.create(new_user).await.unwrap();
 
     let duplicate = NewUser {
-        email: "duplicate@example.com".to_string(),
+        email,
         name: "Second".to_string(),
     };
     let result = repo.create(duplicate).await;
