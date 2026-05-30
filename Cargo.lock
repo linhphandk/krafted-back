@@ -1069,6 +1069,7 @@ dependencies = [
  "diesel_migrations",
  "dotenvy",
  "envy",
+ "http",
  "jsonwebtoken",
  "mockall",
  "reqwest",
