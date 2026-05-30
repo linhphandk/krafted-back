@@ -5,16 +5,9 @@ use crate::shared::errors::AppResult;
 
 #[async_trait]
 pub trait AuthProvider: Send + Sync {
-    async fn discover_oidc(&self) -> AppResult<()>;
+    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<UserInfo>;
 
-    async fn get_authorization_url(&self, state: &str, code_verifier: &str) -> String;
-
-    async fn exchange_code(
-        &self,
-        code: &str,
-        code_verifier: &str,
-        redirect_uri: &str,
-    ) -> AppResult<(Tokens, UserInfo)>;
+    async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
 
     async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
 

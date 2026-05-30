@@ -13,6 +13,8 @@ pub enum AppError {
     BadRequest(String),
     #[error("Internal error")]
     Internal,
+    #[error("Not implemented")]
+    NotImplemented,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -27,6 +29,10 @@ impl IntoResponse for AppError {
             AppError::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal error".to_string(),
+            ),
+            AppError::NotImplemented => (
+                StatusCode::NOT_IMPLEMENTED,
+                "Not implemented".to_string(),
             ),
         };
 

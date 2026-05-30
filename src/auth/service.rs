@@ -1,18 +1,28 @@
+use crate::auth::ports::AuthProvider;
 use crate::shared::errors::{AppError, AppResult};
 use crate::user::models::{NewUser, User};
 use crate::user::ports::UserRepository;
 
 #[derive(Clone)]
-pub struct AuthService<R: UserRepository> {
-    repo: R,
+pub struct AuthService<A: AuthProvider, R: UserRepository> {
+    auth_provider: A,
+    user_repo: R,
 }
 
-impl<R: UserRepository> AuthService<R> {
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+impl<A: AuthProvider, R: UserRepository> AuthService<A, R> {
+    pub fn new(auth_provider: A, user_repo: R) -> Self {
+        Self {
+            auth_provider,
+            user_repo,
+        }
     }
 
-    pub async fn register(&self, email: String, name: String, password: String) -> AppResult<User> {
+    pub async fn register(
+        &self,
+        email: String,
+        name: String,
+        password: String,
+    ) -> AppResult<User> {
         if email.is_empty() {
             return Err(AppError::BadRequest("Email cannot be empty".to_string()));
         }
@@ -25,17 +35,14 @@ impl<R: UserRepository> AuthService<R> {
             ));
         }
 
-        let password_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| {
-            tracing::error!("Password hashing error: {:?}", e);
-            AppError::Internal
-        })?;
+        let _user_info = self.auth_provider.register(&email, &name, &password).await?;
 
         let new_user = NewUser {
             email,
             name,
-            password_hash,
+            password_hash: String::new(),
         };
 
-        self.repo.create(new_user).await
+        self.user_repo.create(new_user).await
     }
 }
