@@ -23,7 +23,6 @@ fn map_diesel_error(e: DieselError, context: &str) -> AppError {
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
             AppError::BadRequest(format!("{} already exists", context))
         }
-        DieselError::NotFound => AppError::NotFound(format!("{} not found", context)),
         _ => AppError::Database(e),
     }
 }
