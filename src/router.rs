@@ -1,18 +1,21 @@
 use axum::routing::get;
+use axum::Json;
 use axum::Router;
-use utoipa::OpenApi;
-use utoipa_scalar::Scalar;
 
-use crate::api_doc::ApiDoc;
+use crate::api_doc::OPENAPI_SPEC;
 use crate::user::{user_router, UserAppState};
 
 pub fn create_router() -> Router<UserAppState> {
     Router::new()
         .route("/health", get(health_check))
+        .route("/api-docs/openapi.json", get(openapi_json))
         .merge(user_router())
-        .merge(Scalar::new(ApiDoc::openapi()))
 }
 
 async fn health_check() -> &'static str {
     "OK"
+}
+
+async fn openapi_json() -> Json<&'static utoipa::openapi::OpenApi> {
+    Json(&OPENAPI_SPEC)
 }

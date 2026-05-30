@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+use utoipa::openapi::OpenApi as OpenApiSpec;
 use utoipa::OpenApi;
 
 use crate::user::controller::{CreateUserRequest, UserResponse};
@@ -15,3 +17,5 @@ use crate::user::controller::{CreateUserRequest, UserResponse};
     ),
 )]
 pub struct ApiDoc;
+
+pub static OPENAPI_SPEC: LazyLock<OpenApiSpec> = LazyLock::new(ApiDoc::openapi);
