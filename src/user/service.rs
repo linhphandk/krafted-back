@@ -2,6 +2,7 @@ use crate::shared::errors::{AppError, AppResult};
 use crate::user::models::{NewUser, User};
 use crate::user::ports::UserRepository;
 
+#[derive(Clone)]
 pub struct UserService<R: UserRepository> {
     repo: R,
 }
