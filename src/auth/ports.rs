@@ -7,7 +7,7 @@ use crate::shared::errors::AppResult;
 pub trait AuthProvider: Send + Sync {
     async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
 
-    async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
+    async fn login(&self, email: &str, password: &str, password_hash: &str) -> AppResult<(Tokens, UserInfo)>;
 
     async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
 
