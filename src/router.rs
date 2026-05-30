@@ -1,19 +1,21 @@
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::Json;
 use axum::Router;
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::api_doc::ApiDoc;
-use crate::user::controller::create_user;
-use crate::user::UserAppState;
+use crate::auth::auth_router;
+use crate::state::AppState;
+use crate::user::user_router;
 
-pub fn create_router(state: UserAppState) -> Router {
+pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/api-docs/openapi.json", get(openapi_json))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()))
-        .route("/users", post(create_user))
+        .merge(user_router())
+        .merge(auth_router())
         .with_state(state)
 }
 

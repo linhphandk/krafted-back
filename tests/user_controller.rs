@@ -3,7 +3,7 @@ use axum::http::{Request, StatusCode};
 use diesel::RunQueryDsl;
 use krafted_back::router::create_router;
 use krafted_back::shared::db::establish_pool;
-use krafted_back::user::UserAppState;
+use krafted_back::state::AppState;
 use tower::ServiceExt;
 
 fn setup_app() -> axum::Router {
@@ -13,7 +13,7 @@ fn setup_app() -> axum::Router {
     diesel::sql_query("DELETE FROM users")
         .execute(&mut conn)
         .ok();
-    let state = UserAppState::new(pool.clone());
+    let state = AppState::new(pool.clone());
     create_router(state)
 }
 
