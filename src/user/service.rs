@@ -1,4 +1,6 @@
-use crate::shared::errors::{AppError, AppResult};
+use uuid::Uuid;
+
+use crate::shared::errors::AppResult;
 use crate::user::models::{NewUser, User};
 use crate::user::ports::UserRepository;
 
@@ -12,19 +14,15 @@ impl<R: UserRepository> UserService<R> {
         Self { repo }
     }
 
-    pub async fn create_user(&self, email: String, name: String) -> AppResult<User> {
-        if email.is_empty() {
-            return Err(AppError::BadRequest("Email cannot be empty".to_string()));
-        }
-        if name.is_empty() {
-            return Err(AppError::BadRequest("Name cannot be empty".to_string()));
-        }
-
-        let new_user = NewUser {
-            email,
-            name,
-            password_hash: String::new(),
-        };
+    pub async fn create(&self, new_user: NewUser) -> AppResult<User> {
         self.repo.create(new_user).await
+    }
+
+    pub async fn find_by_email(&self, email: &str) -> AppResult<Option<User>> {
+        self.repo.find_by_email(email).await
+    }
+
+    pub async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>> {
+        self.repo.find_by_id(id).await
     }
 }
