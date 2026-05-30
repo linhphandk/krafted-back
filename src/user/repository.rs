@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
-use diesel::result::{DatabaseErrorKind, Error as DieselError};
+use diesel::result::DatabaseErrorKind;
 
 use crate::schema::users;
 use crate::shared::db::DbPool;
@@ -8,6 +8,7 @@ use crate::shared::errors::{AppError, AppResult};
 use crate::user::models::{NewUser, User};
 use crate::user::ports::UserRepository;
 
+#[derive(Clone)]
 pub struct DieselUserRepository {
     pool: DbPool,
 }
@@ -18,12 +19,15 @@ impl DieselUserRepository {
     }
 }
 
-fn map_diesel_error(e: DieselError, context: &str) -> AppError {
+fn map_diesel_error(e: diesel::result::Error, context: &str) -> AppError {
     match e {
-        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+        diesel::result::Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
             AppError::BadRequest(format!("{} already exists", context))
         }
-        _ => AppError::Database(e),
+        _ => {
+            tracing::error!("Database error: {:?}", e);
+            AppError::Internal
+        }
     }
 }
 
@@ -31,10 +35,8 @@ fn map_diesel_error(e: DieselError, context: &str) -> AppError {
 impl UserRepository for DieselUserRepository {
     async fn create(&self, new_user: NewUser) -> AppResult<User> {
         let mut conn = self.pool.get().map_err(|e| {
-            AppError::Database(DieselError::DatabaseError(
-                DatabaseErrorKind::Unknown,
-                Box::new(e.to_string()),
-            ))
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
         })?;
         diesel::insert_into(users::table)
             .values(&new_user)

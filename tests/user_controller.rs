@@ -58,6 +58,7 @@ async fn test_create_user_empty_email() {
 #[tokio::test]
 async fn test_create_user_duplicate_email() {
     let app = setup_app();
+    let email = format!("dup-{}@example.com", uuid::Uuid::new_v4());
 
     app.clone()
         .oneshot(
@@ -65,7 +66,10 @@ async fn test_create_user_duplicate_email() {
                 .method("POST")
                 .uri("/users")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"email":"dup@example.com","name":"First"}"#))
+                .body(Body::from(format!(
+                    r#"{{"email":"{}","name":"First"}}"#,
+                    email
+                )))
                 .unwrap(),
         )
         .await
@@ -77,7 +81,10 @@ async fn test_create_user_duplicate_email() {
                 .method("POST")
                 .uri("/users")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"email":"dup@example.com","name":"Second"}"#))
+                .body(Body::from(format!(
+                    r#"{{"email":"{}","name":"Second"}}"#,
+                    email
+                )))
                 .unwrap(),
         )
         .await
