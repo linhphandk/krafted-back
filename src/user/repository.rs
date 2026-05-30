@@ -43,4 +43,19 @@ impl UserRepository for DieselUserRepository {
             .get_result::<User>(&mut conn)
             .map_err(|e| map_diesel_error(e, "Email"))
     }
+
+    async fn find_by_email(&self, email: &str) -> AppResult<Option<User>> {
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        users::table
+            .filter(users::email.eq(email))
+            .first::<User>(&mut conn)
+            .optional()
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })
+    }
 }
