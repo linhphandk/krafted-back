@@ -14,7 +14,7 @@ fn setup_app() -> axum::Router {
         .execute(&mut conn)
         .ok();
     let state = UserAppState::new(pool.clone());
-    create_router().with_state(state)
+    create_router(state)
 }
 
 #[tokio::test]
