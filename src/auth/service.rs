@@ -1,3 +1,4 @@
+use crate::auth::models::Tokens;
 use crate::auth::ports::AuthProvider;
 use crate::shared::errors::{AppError, AppResult};
 use crate::user::models::{NewUser, User};
@@ -22,7 +23,7 @@ impl<A: AuthProvider, R: UserRepository> AuthService<A, R> {
         email: String,
         name: String,
         password: String,
-    ) -> AppResult<User> {
+    ) -> AppResult<(User, Tokens)> {
         if email.is_empty() {
             return Err(AppError::BadRequest("Email cannot be empty".to_string()));
         }
@@ -35,7 +36,7 @@ impl<A: AuthProvider, R: UserRepository> AuthService<A, R> {
             ));
         }
 
-        let user_info = self.auth_provider.register(&email, &name, &password).await?;
+        let (user_info, tokens) = self.auth_provider.register(&email, &name, &password).await?;
 
         let new_user = NewUser {
             email,
@@ -43,6 +44,7 @@ impl<A: AuthProvider, R: UserRepository> AuthService<A, R> {
             password_hash: user_info.password_hash,
         };
 
-        self.user_repo.create(new_user).await
+        let user = self.user_repo.create(new_user).await?;
+        Ok((user, tokens))
     }
 }

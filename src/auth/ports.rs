@@ -5,7 +5,7 @@ use crate::shared::errors::AppResult;
 
 #[async_trait]
 pub trait AuthProvider: Send + Sync {
-    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<UserInfo>;
+    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
 
     async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
 
