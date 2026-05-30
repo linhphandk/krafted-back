@@ -97,23 +97,22 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 ### M3 — Authentik Integration (External Adapter)
 - [ ] Deploy/configure Authentik (Docker Compose for dev)
-- [ ] Define port trait: `AuthProvider` — `get_authorization_url()`, `exchange_code()`, `introspect_token()`, `refresh_token()`, `revoke_token()`
+- [ ] Define port trait: `AuthProvider` — `register()`, `login()`, `introspect_token()`, `refresh_token()`, `revoke_token()`
 - [ ] Implement `AuthentikAuthProvider` adapter (`src/auth/repository.rs`):
-  - **OIDC Discovery**: fetch `/.well-known/openid-configuration` to auto-discover authorize, token, introspect, revoke, JWKS endpoints
-  - **`get_authorization_url()`**: build `/authorize` URL with `client_id`, `redirect_uri`, `response_type=code`, `scope=openid email profile`, `state`, `code_challenge` (SHA256 of PKCE `code_verifier`)
-  - **`exchange_code()`**: POST to `/token` with `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id`, `code_verifier`; parse response (`access_token`, `refresh_token`, `id_token`); validate `id_token` JWT signature via JWKS; extract user claims (sub, email, name)
+  - **`register()`**: POST to Authentik admin API to create user with email, name, password; return `UserInfo` (sub, email, name)
+  - **`login()`**: POST to Authentik `/token` with `grant_type=password` (ROPC flow); parse response (`access_token`, `refresh_token`, `id_token`); validate `id_token` JWT signature via JWKS; extract user claims (sub, email, name)
   - **`introspect_token()`**: verify JWT locally — decode, verify signature against JWKS public key, check `exp`, `iss`, `aud` claims; fallback to POST `/introspect` if needed
   - **`refresh_token()`**: POST to `/token` with `grant_type=refresh_token`; return new `access_token` (and optionally new `refresh_token`)
   - **`revoke_token()`**: POST to `/revoke` endpoint; invalidate token server-side
   - **JWKS cache**: fetch `/.well-known/jwks.json`, cache public keys, handle key rotation (refetch on signature mismatch)
-  - **User provisioning**: after `exchange_code()`, call `UserRepository.find_by_email()` — create or update local user record linked to Authentik identity
+  - **OIDC Discovery**: fetch `/.well-known/openid-configuration` to auto-discover token, introspect, revoke, JWKS endpoints
 - [ ] Wire `AuthentikAuthProvider` into `AppState` and inject into `AuthService`
 
 ### M4 — Service Layer (Business Logic)
 - [ ] Implement `AuthService`:
+  - `register()` — provision user in Authentik + local DB (done)
   - `login()` — delegate to AuthProvider, create local session
   - `logout()` — revoke session
-  - `register()` — provision user in Authentik + local DB
   - `refresh_token()` — handle token refresh
 - [ ] Implement `UserService`:
   - `get_user()`, `update_user()`, `delete_user()`
@@ -124,8 +123,8 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 ### M5 — Controller Layer (HTTP API)
 - [ ] Auth endpoints:
-  - `POST /api/auth/login` — initiate OAuth2 flow
-  - `GET  /api/auth/callback` — OAuth2 callback
+  - `POST /api/auth/register` — register user (done)
+  - `POST /api/auth/login` — authenticate with credentials, return tokens
   - `POST /api/auth/logout` — revoke session
   - `POST /api/auth/refresh` — refresh tokens
   - `GET  /api/auth/me` — current user info
@@ -162,8 +161,10 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Auth flow | OAuth2 Auth Code + PKCE | Most secure for SPA backend |
-| Token format | JWT (issued by Authentik) | Stateless verification |
+| Auth flow | ROPC (password grant) | Users login via app UI, credentials verified by Authentik |
+| Credentials | Stored in Authentik | No password hashing in local DB, SSO support |
+| Profile data | Stored in local DB | App-specific data (name, roles, preferences) |
+| Token format | JWT (issued by Authentik) | Stateless verification via JWKS |
 | Session strategy | Local session table + JWT | Revocation support via DB |
 | Repository pattern | Diesel with traits | Type-safe, testable |
 | Config | dotenv + envy | Typed, validated config |
@@ -173,11 +174,11 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 ```rust
 // src/auth/ports.rs
 pub trait AuthProvider: Send + Sync {
-    async fn get_authorization_url(&self, state: &str) -> String;
-    async fn exchange_code(&self, code: &str) -> AuthResult<Tokens>;
-    async fn introspect_token(&self, token: &str) -> AuthResult<UserInfo>;
-    async fn refresh_token(&self, refresh_token: &str) -> AuthResult<Tokens>;
-    async fn revoke_token(&self, token: &str) -> AuthResult<()>;
+    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<UserInfo>;
+    async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
+    async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
+    async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
+    async fn revoke_token(&self, token: &str) -> AppResult<()>;
 }
 
 // src/user/ports.rs
@@ -209,7 +210,7 @@ pub trait RbacRepository: Send + Sync {
 
 | Port | Adapter | Location | Technology |
 |---|---|---|---|
-| `AuthProvider` | `AuthentikAuthProvider` | `src/auth/repository.rs` | OAuth2/OIDC via Authentik API |
+| `AuthProvider` | `AuthentikAuthProvider` | `src/auth/repository.rs` | Authentik API (ROPC + admin) |
 | `UserRepository` | `DieselUserRepository` | `src/user/repository.rs` | Diesel + PostgreSQL |
 | `SessionRepository` | `DieselSessionRepository` | `src/session/repository.rs` | Diesel + PostgreSQL |
 | `RbacRepository` | `DieselRbacRepository` | `src/rbac/repository.rs` | Diesel + PostgreSQL |
@@ -221,7 +222,8 @@ src/auth/controller.rs
          ↓
 src/auth/service.rs
          ↓  (depends on traits)
-src/auth/ports.rs  ←  src/auth/repository.rs (adapter impl)
+         ├─ src/auth/ports.rs  ←  src/auth/repository.rs (adapter impl)
+         └─ src/user/ports.rs  ←  src/user/repository.rs (adapter impl)
 
 src/user/controller.rs
          ↓
