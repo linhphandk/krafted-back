@@ -1,0 +1,73 @@
+use async_trait::async_trait;
+use chrono::NaiveDateTime;
+use krafted_back::shared::errors::{AppError, AppResult};
+use krafted_back::user::models::{NewUser, User};
+use krafted_back::user::ports::UserRepository;
+use krafted_back::user::service::UserService;
+use mockall::mock;
+use uuid::Uuid;
+
+mock! {
+    pub MockUserRepo {}
+
+    #[async_trait]
+    impl UserRepository for MockUserRepo {
+        async fn create(&self, user: NewUser) -> AppResult<User>;
+    }
+}
+
+fn fake_user() -> User {
+    User {
+        id: Uuid::new_v4(),
+        email: "test@example.com".to_string(),
+        name: "Test".to_string(),
+        created_at: NaiveDateTime::default(),
+        updated_at: NaiveDateTime::default(),
+    }
+}
+
+#[tokio::test]
+async fn test_create_user_success() {
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo.expect_create().returning(|_| Ok(fake_user()));
+
+    let service = UserService::new(mock_repo);
+    let result = service
+        .create_user("test@example.com".to_string(), "Test".to_string())
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_create_user_empty_email() {
+    let mock_repo = MockMockUserRepo::new();
+    let service = UserService::new(mock_repo);
+    let result = service
+        .create_user("".to_string(), "Test".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_create_user_empty_name() {
+    let mock_repo = MockMockUserRepo::new();
+    let service = UserService::new(mock_repo);
+    let result = service
+        .create_user("test@example.com".to_string(), "".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_create_user_repo_error() {
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo
+        .expect_create()
+        .returning(|_| Err(AppError::BadRequest("Email already exists".to_string())));
+
+    let service = UserService::new(mock_repo);
+    let result = service
+        .create_user("dup@example.com".to_string(), "Test".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
