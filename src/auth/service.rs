@@ -8,11 +8,12 @@ use crate::session::ports::SessionRepository;
 use crate::shared::errors::{AppError, AppResult};
 use crate::user::models::{NewUser, User};
 use crate::user::ports::UserRepository;
+use crate::user::service::UserService;
 
 #[derive(Clone)]
 pub struct AuthService<A: AuthProvider, R: UserRepository, S: SessionRepository> {
     auth_provider: A,
-    user_repo: R,
+    user_service: UserService<R>,
     session_repo: S,
     refresh_token_expiry_days: i64,
 }
@@ -21,7 +22,7 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
     pub fn new(auth_provider: A, user_repo: R, session_repo: S, refresh_token_expiry_days: i64) -> Self {
         Self {
             auth_provider,
-            user_repo,
+            user_service: UserService::new(user_repo),
             session_repo,
             refresh_token_expiry_days,
         }
@@ -53,12 +54,12 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
             password_hash: user_info.password_hash,
         };
 
-        let user = self.user_repo.create(new_user).await?;
+        let user = self.user_service.create(new_user).await?;
         Ok((user, tokens))
     }
 
     pub async fn login(&self, email: String, password: String) -> AppResult<(User, Tokens)> {
-        let user = self.user_repo.find_by_email(&email).await?;
+        let user = self.user_service.find_by_email(&email).await?;
         let user = user.ok_or(AppError::BadRequest("Invalid email or password".to_string()))?;
 
         let (tokens, _user_info) = self
@@ -104,7 +105,7 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
             return Err(AppError::BadRequest("Refresh token expired".to_string()));
         }
 
-        let user = self.user_repo.find_by_id(session.user_id).await?;
+        let user = self.user_service.find_by_id(session.user_id).await?;
         let user = user.ok_or(AppError::Internal)?;
 
         let new_access_token = self
@@ -141,7 +142,7 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
 
     pub async fn get_current_user(&self, access_token: String) -> AppResult<User> {
         let user_info = self.auth_provider.introspect_token(&access_token).await?;
-        let user = self.user_repo.find_by_email(&user_info.email).await?;
+        let user = self.user_service.find_by_email(&user_info.email).await?;
         user.ok_or(AppError::BadRequest("User not found".to_string()))
     }
 }

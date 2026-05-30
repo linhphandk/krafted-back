@@ -8,6 +8,7 @@ use krafted_back::session::ports::SessionRepository;
 use krafted_back::shared::errors::{AppError, AppResult};
 use krafted_back::user::models::{NewUser, User};
 use krafted_back::user::ports::UserRepository;
+use krafted_back::user::service::UserService;
 use mockall::mock;
 use uuid::Uuid;
 
@@ -94,6 +95,14 @@ fn new_service() -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMock
         MockMockSessionRepo::new(),
         7,
     )
+}
+
+fn new_service_with_mocks(
+    auth: MockMockAuthProvider,
+    user: MockMockUserRepo,
+    session: MockMockSessionRepo,
+) -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo> {
+    AuthService::new(auth, user, session, 7)
 }
 
 #[tokio::test]
