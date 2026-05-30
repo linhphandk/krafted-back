@@ -1,8 +1,12 @@
 use axum::routing::get;
 use axum::Router;
 
-pub fn create_router() -> Router {
-    Router::new().route("/health", get(health_check))
+use crate::user::{user_router, UserAppState};
+
+pub fn create_router() -> Router<UserAppState> {
+    Router::new()
+        .route("/health", get(health_check))
+        .merge(user_router())
 }
 
 async fn health_check() -> &'static str {
