@@ -311,3 +311,46 @@ async fn test_refresh_token_e2e() {
     assert!(!new_access_token.is_empty());
     assert!(!new_refresh_token.is_empty());
 }
+
+#[tokio::test]
+async fn test_auth_middleware_missing_token() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker);
+
+    let response = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/auth/me")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_auth_middleware_invalid_token() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker);
+
+    let response = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/auth/me")
+                .header("content-type", "application/json")
+                .header("Authorization", "Bearer invalid-token")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
