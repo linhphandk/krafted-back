@@ -19,10 +19,3 @@ pub struct NewUser {
     pub email: String,
     pub name: String,
 }
-
-#[derive(AsChangeset)]
-#[diesel(table_name = crate::schema::users)]
-pub struct UpdateUser {
-    pub email: Option<String>,
-    pub name: Option<String>,
-}
