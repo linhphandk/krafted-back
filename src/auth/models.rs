@@ -13,6 +13,7 @@ pub struct UserInfo {
     pub sub: String,
     pub email: String,
     pub name: String,
+    pub password_hash: String,
 }
 
 #[derive(Debug, Deserialize)]

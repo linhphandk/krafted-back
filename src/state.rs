@@ -1,4 +1,4 @@
-use crate::auth::repository::LocalAuthProvider;
+use crate::auth::provider::LocalAuthProvider;
 use crate::shared::db::DbPool;
 use crate::user::repository::DieselUserRepository;
 

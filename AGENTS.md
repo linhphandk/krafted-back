@@ -16,3 +16,6 @@
 - No comments unless explicitly requested
 - Follow existing conventions in the codebase
 - Run `cargo fmt`, `cargo clippy`, `cargo check` before committing
+
+## Local Environment
+- Run `nix-shell -p postgresql` before running `cargo test` to provide `libpq` linker
