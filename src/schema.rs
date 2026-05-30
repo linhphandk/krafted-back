@@ -13,3 +13,14 @@ diesel::table! {
         password_hash -> Varchar,
     }
 }
+
+diesel::table! {
+    sessions (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 255]
+        refresh_token -> Varchar,
+        expires_at -> Timestamp,
+        created_at -> Timestamp,
+    }
+}
