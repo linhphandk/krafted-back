@@ -13,15 +13,15 @@ async fn main() {
 
     let config = Config::from_env().expect("Failed to load config");
 
-    let pool = establish_pool(&config.database.url, config.database.pool_size);
+    let pool = establish_pool(&config.database_url, config.database_pool_size);
     run_migrations(&pool);
 
     let state = UserAppState::new(pool.clone());
     let app = create_router().with_state(state);
 
     let addr = SocketAddr::from((
-        config.server.host.parse::<std::net::IpAddr>().unwrap(),
-        config.server.port,
+        config.server_host.parse::<std::net::IpAddr>().unwrap(),
+        config.server_port,
     ));
     tracing::info!("Server starting on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

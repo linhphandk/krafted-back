@@ -2,28 +2,13 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub server: ServerConfig,
-    pub database: DatabaseConfig,
-    pub authentik: AuthentikConfig,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ServerConfig {
-    pub host: String,
-    pub port: u16,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DatabaseConfig {
-    pub url: String,
-    pub pool_size: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AuthentikConfig {
-    pub base_url: String,
-    pub client_id: String,
-    pub client_secret: String,
+    pub server_host: String,
+    pub server_port: u16,
+    pub database_url: String,
+    pub database_pool_size: u32,
+    pub authentik_base_url: String,
+    pub authentik_client_id: String,
+    pub authentik_client_secret: String,
 }
 
 impl Config {
