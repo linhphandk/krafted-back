@@ -5,7 +5,7 @@
 - **Framework**: Axum
 - **ORM**: Diesel
 - **Database**: PostgreSQL
-- **Identity Provider**: Authentik (OAuth2/OIDC)
+- **Identity Provider**: Local Auth (bcrypt + JWT)
 
 ## Architecture: Ports & Adapters (Hexagonal), Domain-Scoped
 
@@ -16,7 +16,7 @@ src/
     controller.rs        # Axum handlers, routes, DTOs
     service.rs           # Auth business logic
     ports.rs             # AuthProvider trait
-    repository.rs        # AuthentikAuthProvider adapter
+    repository.rs        # LocalAuthProvider adapter
     models.rs            # Auth domain models (Token, Session)
   user/
     mod.rs
@@ -41,7 +41,7 @@ src/
   shared/
     errors.rs            # Shared error types
     types.rs             # Shared type aliases, newtypes
-    config.rs            # App config (Env, Authentik, DB)
+    config.rs            # App config (Env, JWT, DB)
     middleware.rs         # Auth guard, RBAC guard
   main.rs
   lib.rs
@@ -63,7 +63,7 @@ migrations/              # Diesel migrations
 └────────┬─────────┘
          │ impl
 ┌────────▼─────────┐
-│  Repository.rs   │  Adapters: Diesel queries, Authentik API
+│  Repository.rs   │  Adapters: Diesel queries, Local Auth logic
 └──────────────────┘
 ```
 
@@ -89,31 +89,29 @@ Each domain module is self-contained. Services depend on port traits; adapters i
   - `session/ports.rs` — `SessionRepository` trait
   - `rbac/ports.rs` — `RbacRepository` trait
 - [ ] Implement adapters per domain:
-  - `auth/repository.rs` — `AuthentikAuthProvider`
+  - `auth/repository.rs` — `LocalAuthProvider`
   - `user/repository.rs` — `DieselUserRepository`
   - `session/repository.rs` — `DieselSessionRepository`
   - `rbac/repository.rs` — `DieselRbacRepository`
 - [ ] Add integration tests for repositories
 
-### M3 — Authentik Integration (External Adapter)
-- [ ] Deploy/configure Authentik (Docker Compose for dev)
+### M3 — Local Auth Implementation
 - [ ] Define port trait: `AuthProvider` — `register()`, `login()`, `introspect_token()`, `refresh_token()`, `revoke_token()`
-- [ ] Implement `AuthentikAuthProvider` adapter (`src/auth/repository.rs`):
-  - **`register()`**: POST to Authentik admin API to create user with email, name, password; return `UserInfo` (sub, email, name)
-  - **`login()`**: POST to Authentik `/token` with `grant_type=password` (ROPC flow); parse response (`access_token`, `refresh_token`, `id_token`); validate `id_token` JWT signature via JWKS; extract user claims (sub, email, name)
-  - **`introspect_token()`**: verify JWT locally — decode, verify signature against JWKS public key, check `exp`, `iss`, `aud` claims; fallback to POST `/introspect` if needed
-  - **`refresh_token()`**: POST to `/token` with `grant_type=refresh_token`; return new `access_token` (and optionally new `refresh_token`)
-  - **`revoke_token()`**: POST to `/revoke` endpoint; invalidate token server-side
-  - **JWKS cache**: fetch `/.well-known/jwks.json`, cache public keys, handle key rotation (refetch on signature mismatch)
-  - **OIDC Discovery**: fetch `/.well-known/openid-configuration` to auto-discover token, introspect, revoke, JWKS endpoints
-- [ ] Wire `AuthentikAuthProvider` into `AppState` and inject into `AuthService`
+- [ ] Implement `LocalAuthProvider` adapter (`src/auth/repository.rs`):
+  - **`register()`**: Hash password with `bcrypt`, call `UserRepository.create()`, return `UserInfo`
+  - **`login()`**: Find user by email, verify password with `bcrypt`, generate JWT access token + refresh token (UUID), save refresh token to `sessions` table, return `(Tokens, UserInfo)`
+  - **`introspect_token()`**: Decode and verify JWT signature using local secret, check `exp`, return `UserInfo`
+  - **`refresh_token()`**: Find refresh token in `sessions` table, verify not expired, rotate token, issue new access token
+  - **`revoke_token()`**: Delete refresh token from `sessions` table
+- [ ] Add JWT config (`JWT_SECRET`, `JWT_EXPIRY_MINUTES`)
+- [ ] Update `AppState` to inject `LocalAuthProvider`
 
 ### M4 — Service Layer (Business Logic)
 - [ ] Implement `AuthService`:
-  - `register()` — provision user in Authentik + local DB (done)
-  - `login()` — delegate to AuthProvider, create local session
+  - `register()` — hash password in DB (done)
+  - `login()` — delegate to `AuthProvider`, create session
   - `logout()` — revoke session
-  - `refresh_token()` — handle token refresh
+  - `refresh_token()` — handle token rotation
 - [ ] Implement `UserService`:
   - `get_user()`, `update_user()`, `delete_user()`
 - [ ] Implement `RBACService`:
@@ -124,10 +122,10 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 ### M5 — Controller Layer (HTTP API)
 - [ ] Auth endpoints:
   - `POST /api/auth/register` — register user (done)
-  - `POST /api/auth/login` — authenticate with credentials, return tokens
-  - `POST /api/auth/logout` — revoke session
-  - `POST /api/auth/refresh` — refresh tokens
-  - `GET  /api/auth/me` — current user info
+  - `POST /api/auth/login` — authenticate, return JWT + refresh cookie
+  - `POST /api/auth/logout` — revoke refresh token
+  - `POST /api/auth/refresh` — rotate refresh token, return new JWT
+  - `GET  /api/auth/me` — current user info (protected)
 - [ ] User management:
   - `GET    /api/users` — list users (admin)
   - `GET    /api/users/:id` — get user
@@ -138,14 +136,14 @@ Each domain module is self-contained. Services depend on port traits; adapters i
   - `POST   /api/roles` — create role (admin)
   - `POST   /api/users/:id/roles` — assign role
   - `DELETE /api/users/:id/roles/:role` — revoke role
-- [ ] Middleware: auth guard (extract+validate JWT), RBAC guard (check permissions)
+- [ ] Middleware: auth guard (verify JWT), RBAC guard (check permissions)
 - [ ] Error handling: map domain errors to proper HTTP responses
 
 ### M7 — Authorization Logic (RBAC + ABAC)
 - [ ] Define seed data: default roles (`admin`, `user`, `editor`) and permissions
 - [ ] Implement permission checks in service layer
 - [ ] Implement ABAC policies as needed (resource-level checks)
-- [ ] Middleware to extract roles/permissions from verified JWT claims
+- [ ] Middleware to extract roles/permissions from JWT claims
 - [ ] Admin-only endpoints enforced
 
 ### M8 — Testing & Documentation
@@ -153,7 +151,7 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 - [ ] Integration tests: repository layer with test DB
 - [ ] API docs (OpenAPI/Swagger via utoipa)
 - [ ] Architecture decision records for key choices
-- [ ] Runnable Docker Compose (Postgres + Authentik + backend)
+- [ ] Runnable Docker Compose (Postgres + backend)
 
 ---
 
@@ -161,11 +159,10 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Auth flow | ROPC (password grant) | Users login via app UI, credentials verified by Authentik |
-| Credentials | Stored in Authentik | No password hashing in local DB, SSO support |
-| Profile data | Stored in local DB | App-specific data (name, roles, preferences) |
-| Token format | JWT (issued by Authentik) | Stateless verification via JWKS |
-| Session strategy | Local session table + JWT | Revocation support via DB |
+| Auth flow | Local Auth + JWT | Simplest, no external IdP, full control |
+| Credentials | Stored in local DB (bcrypt) | Zero external dependencies, secure hashing |
+| Token format | Self-signed JWT | Stateless verification, no JWKS needed |
+| Session strategy | Refresh token in DB | Revocation support, rotation |
 | Repository pattern | Diesel with traits | Type-safe, testable |
 | Config | dotenv + envy | Typed, validated config |
 
@@ -210,7 +207,7 @@ pub trait RbacRepository: Send + Sync {
 
 | Port | Adapter | Location | Technology |
 |---|---|---|---|
-| `AuthProvider` | `AuthentikAuthProvider` | `src/auth/repository.rs` | Authentik API (ROPC + admin) |
+| `AuthProvider` | `LocalAuthProvider` | `src/auth/repository.rs` | bcrypt + jsonwebtoken |
 | `UserRepository` | `DieselUserRepository` | `src/user/repository.rs` | Diesel + PostgreSQL |
 | `SessionRepository` | `DieselSessionRepository` | `src/session/repository.rs` | Diesel + PostgreSQL |
 | `RbacRepository` | `DieselRbacRepository` | `src/rbac/repository.rs` | Diesel + PostgreSQL |

@@ -1,14 +1,18 @@
-use async_trait::async_trait;
-
 use crate::auth::models::{Tokens, UserInfo};
 use crate::auth::ports::AuthProvider;
 use crate::shared::errors::{AppError, AppResult};
 
 #[derive(Clone)]
-pub struct MockAuthProvider;
+pub struct LocalAuthProvider;
 
-#[async_trait]
-impl AuthProvider for MockAuthProvider {
+impl LocalAuthProvider {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait::async_trait]
+impl AuthProvider for LocalAuthProvider {
     async fn register(&self, _email: &str, _name: &str, _password: &str) -> AppResult<UserInfo> {
         Err(AppError::NotImplemented)
     }
