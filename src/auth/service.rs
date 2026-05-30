@@ -90,4 +90,8 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
 
         Ok((user, tokens))
     }
+
+    pub async fn logout(&self, refresh_token: String) -> AppResult<()> {
+        self.session_repo.revoke(&refresh_token).await
+    }
 }

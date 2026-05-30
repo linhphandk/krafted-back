@@ -182,3 +182,18 @@ async fn test_login_user_not_found() {
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
+
+#[tokio::test]
+async fn test_logout_success() {
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session.expect_revoke().returning(|_| Ok(()));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        mock_session,
+        7,
+    );
+    let result = service.logout("test-refresh".to_string()).await;
+    assert!(result.is_ok());
+}
