@@ -97,13 +97,17 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 ### M3 — Authentik Integration (External Adapter)
 - [ ] Deploy/configure Authentik (Docker Compose for dev)
-- [ ] Define port trait: `AuthProvider` — `login()`, `logout()`, `get_user()`, `introspect_token()`
-- [ ] Implement `AuthentikAuthProvider` adapter:
-  - OAuth2 Authorization Code flow
-  - Token introspection & validation
-  - User provisioning from Authentik to local DB
-- [ ] OIDC discovery & JWKS verification
-- [ ] Token refresh handling
+- [ ] Define port trait: `AuthProvider` — `get_authorization_url()`, `exchange_code()`, `introspect_token()`, `refresh_token()`, `revoke_token()`
+- [ ] Implement `AuthentikAuthProvider` adapter (`src/auth/repository.rs`):
+  - **OIDC Discovery**: fetch `/.well-known/openid-configuration` to auto-discover authorize, token, introspect, revoke, JWKS endpoints
+  - **`get_authorization_url()`**: build `/authorize` URL with `client_id`, `redirect_uri`, `response_type=code`, `scope=openid email profile`, `state`, `code_challenge` (SHA256 of PKCE `code_verifier`)
+  - **`exchange_code()`**: POST to `/token` with `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id`, `code_verifier`; parse response (`access_token`, `refresh_token`, `id_token`); validate `id_token` JWT signature via JWKS; extract user claims (sub, email, name)
+  - **`introspect_token()`**: verify JWT locally — decode, verify signature against JWKS public key, check `exp`, `iss`, `aud` claims; fallback to POST `/introspect` if needed
+  - **`refresh_token()`**: POST to `/token` with `grant_type=refresh_token`; return new `access_token` (and optionally new `refresh_token`)
+  - **`revoke_token()`**: POST to `/revoke` endpoint; invalidate token server-side
+  - **JWKS cache**: fetch `/.well-known/jwks.json`, cache public keys, handle key rotation (refetch on signature mismatch)
+  - **User provisioning**: after `exchange_code()`, call `UserRepository.find_by_email()` — create or update local user record linked to Authentik identity
+- [ ] Wire `AuthentikAuthProvider` into `AppState` and inject into `AuthService`
 
 ### M4 — Service Layer (Business Logic)
 - [ ] Implement `AuthService`:
