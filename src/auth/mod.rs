@@ -11,4 +11,5 @@ pub fn auth_router() -> axum::Router<AppState> {
     axum::Router::<AppState>::new()
         .route("/auth/register", post(controller::register))
         .route("/auth/login", post(controller::login))
+        .route("/auth/logout", post(controller::logout))
 }
