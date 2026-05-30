@@ -6,7 +6,7 @@ use krafted_back::user::ports::UserRepository;
 use krafted_back::user::repository::DieselUserRepository;
 
 fn setup_repository() -> DieselUserRepository {
-    let db_url = "postgres://postgres:example@localhost:5432/postgres";
+    let db_url = "postgres://krafted:krafted@localhost:5432/krafted";
     let pool = establish_pool(db_url, 4);
     let mut conn = pool.get().expect("Failed to get connection");
     diesel::sql_query("DELETE FROM users")
