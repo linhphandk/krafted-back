@@ -13,7 +13,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/health", get(health_check))
         .route("/api-docs/openapi.json", get(openapi_json))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()))
-        .merge(auth_router())
+        .merge(auth_router(&state))
         .with_state(state)
 }
 

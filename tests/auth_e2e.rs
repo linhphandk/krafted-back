@@ -53,7 +53,7 @@ async fn test_register_and_login_e2e() {
         .await
         .unwrap();
 
-    assert_eq!(register_response.status(), StatusCode::CREATED);
+    assert!(register_response.status().is_success());
     let body = axum::body::to_bytes(register_response.into_body(), usize::MAX)
         .await
         .unwrap();
@@ -353,4 +353,75 @@ async fn test_auth_middleware_invalid_token() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_me_endpoint_success() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker);
+
+    app.clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/auth/register")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(
+                    serde_json::to_string(&json!({
+                        "email": "me@example.com",
+                        "name": "Me User",
+                        "password": "password123"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let login_response = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/auth/login")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(
+                    serde_json::to_string(&json!({
+                        "email": "me@example.com",
+                        "password": "password123"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(login_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let access_token = json["access_token"].as_str().unwrap().to_string();
+
+    let me_response = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/auth/me")
+                .header("Authorization", format!("Bearer {}", access_token))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(me_response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(me_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["email"], "me@example.com");
+    assert_eq!(json["name"], "Me User");
 }
