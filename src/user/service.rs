@@ -20,7 +20,11 @@ impl<R: UserRepository> UserService<R> {
             return Err(AppError::BadRequest("Name cannot be empty".to_string()));
         }
 
-        let new_user = NewUser { email, name };
+        let new_user = NewUser {
+            email,
+            name,
+            password_hash: String::new(),
+        };
         self.repo.create(new_user).await
     }
 }

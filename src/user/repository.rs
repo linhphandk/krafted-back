@@ -40,7 +40,7 @@ impl UserRepository for DieselUserRepository {
         })?;
         diesel::insert_into(users::table)
             .values(&new_user)
-            .get_result(&mut conn)
+            .get_result::<User>(&mut conn)
             .map_err(|e| map_diesel_error(e, "Email"))
     }
 }

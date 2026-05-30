@@ -11,6 +11,7 @@ pub struct User {
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub password_hash: String,
 }
 
 #[derive(Insertable)]
@@ -18,4 +19,5 @@ pub struct User {
 pub struct NewUser {
     pub email: String,
     pub name: String,
+    pub password_hash: String,
 }
