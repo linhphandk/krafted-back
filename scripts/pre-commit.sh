@@ -9,9 +9,9 @@ cargo clippy -- -D warnings
 
 echo "Running tests..."
 if command -v nix-shell &> /dev/null; then
-    nix-shell -p postgresql --run "cargo test"
+    nix-shell -p postgresql --run "cargo test -- --test-threads=1"
 else
-    cargo test
+    cargo test -- --test-threads=1
 fi
 
 echo "Pre-commit checks passed."
