@@ -8,8 +8,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(pool: DbPool) -> Self {
-        let auth_provider = LocalAuthProvider::new();
+    pub fn new(pool: DbPool, jwt_secret: String, jwt_expiry_minutes: u64) -> Self {
+        let auth_provider = LocalAuthProvider::new(jwt_secret, jwt_expiry_minutes);
         let user_repo = DieselUserRepository::new(pool);
         let auth_service = crate::auth::service::AuthService::new(auth_provider, user_repo);
         Self { auth_service }

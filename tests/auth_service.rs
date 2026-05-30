@@ -14,7 +14,7 @@ mock! {
 
     #[async_trait]
     impl AuthProvider for MockAuthProvider {
-        async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<UserInfo>;
+        async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
         async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
         async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
         async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
@@ -51,12 +51,21 @@ fn fake_user_info() -> UserInfo {
     }
 }
 
+fn fake_tokens() -> Tokens {
+    Tokens {
+        access_token: "fake-jwt".to_string(),
+        refresh_token: String::new(),
+        id_token: String::new(),
+        expires_in: 900,
+    }
+}
+
 #[tokio::test]
 async fn test_register_success() {
     let mut mock_auth = MockMockAuthProvider::new();
     mock_auth
         .expect_register()
-        .returning(|_, _, _| Ok(fake_user_info()));
+        .returning(|_, _, _| Ok((fake_user_info(), fake_tokens())));
 
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo.expect_create().returning(|_| Ok(fake_user()));
@@ -70,6 +79,9 @@ async fn test_register_success() {
         )
         .await;
     assert!(result.is_ok());
+    let (user, tokens) = result.unwrap();
+    assert_eq!(user.email, "test@example.com");
+    assert_eq!(tokens.access_token, "fake-jwt");
 }
 
 #[tokio::test]
@@ -124,7 +136,7 @@ async fn test_register_delegates_to_auth_provider() {
         .expect_register()
         .withf(|email, name, _| email == "test@example.com" && name == "Test")
         .times(1)
-        .returning(|_, _, _| Ok(fake_user_info()));
+        .returning(|_, _, _| Ok((fake_user_info(), fake_tokens())));
 
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo.expect_create().returning(|_| Ok(fake_user()));

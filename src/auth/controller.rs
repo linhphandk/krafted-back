@@ -18,6 +18,13 @@ pub struct RegisterRequest {
 }
 
 #[derive(serde::Serialize, ToSchema)]
+pub struct RegisterResponse {
+    pub user: UserResponse,
+    pub access_token: String,
+    pub expires_in: u64,
+}
+
+#[derive(serde::Serialize, ToSchema)]
 pub struct UserResponse {
     pub id: String,
     pub email: String,
@@ -29,7 +36,7 @@ pub struct UserResponse {
     path = "/auth/register",
     request_body = RegisterRequest,
     responses(
-        (status = 201, description = "User registered", body = UserResponse),
+        (status = 201, description = "User registered", body = RegisterResponse),
         (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
     ),
     tag = "auth",
@@ -37,15 +44,19 @@ pub struct UserResponse {
 pub async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
-) -> AppResult<(StatusCode, Json<UserResponse>)> {
-    let user = state
+) -> AppResult<(StatusCode, Json<RegisterResponse>)> {
+    let (user, tokens) = state
         .auth_service
         .register(req.email, req.name, req.password)
         .await?;
-    let response = UserResponse {
-        id: user.id.to_string(),
-        email: user.email,
-        name: user.name,
+    let response = RegisterResponse {
+        user: UserResponse {
+            id: user.id.to_string(),
+            email: user.email,
+            name: user.name,
+        },
+        access_token: tokens.access_token,
+        expires_in: tokens.expires_in,
     };
     Ok((StatusCode::CREATED, Json(response)))
 }
