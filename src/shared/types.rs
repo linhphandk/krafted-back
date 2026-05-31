@@ -7,4 +7,5 @@ pub struct AuthenticatedUser {
     pub id: Uuid,
     pub email: String,
     pub name: String,
+    pub role: String,
 }

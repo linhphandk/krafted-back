@@ -73,9 +73,11 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
         let user = self.user_service.find_by_email(&email).await?;
         let user = user.ok_or(AppError::BadRequest("Invalid email or password".to_string()))?;
 
+        let (role, _permissions) = self.rbac_service.get_user_permissions(user.id).await?;
+
         let (tokens, _user_info) = self
             .auth_provider
-            .login(&email, &password, &user.password_hash)
+            .login(&email, &password, &user.password_hash, &role)
             .await?;
 
         let refresh_token = Uuid::new_v4().to_string();
@@ -119,9 +121,11 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
         let user = self.user_service.find_by_id(session.user_id).await?;
         let user = user.ok_or(AppError::Internal)?;
 
+        let (role, _permissions) = self.rbac_service.get_user_permissions(user.id).await?;
+
         let new_access_token = self
             .auth_provider
-            .generate_access_token(&user.id.to_string(), &user.email)
+            .generate_access_token(&user.id.to_string(), &user.email, &role)
             .await?;
 
         self.session_repo.revoke(&refresh_token).await?;
@@ -151,9 +155,10 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
         Ok((user, tokens))
     }
 
-    pub async fn get_current_user(&self, access_token: String) -> AppResult<User> {
+    pub async fn get_current_user(&self, access_token: String) -> AppResult<(User, String)> {
         let user_info = self.auth_provider.introspect_token(&access_token).await?;
         let user = self.user_service.find_by_email(&user_info.email).await?;
-        user.ok_or(AppError::BadRequest("User not found".to_string()))
+        let user = user.ok_or(AppError::BadRequest("User not found".to_string()))?;
+        Ok((user, user_info.role))
     }
 }
