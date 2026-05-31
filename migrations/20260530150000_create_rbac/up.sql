@@ -31,15 +31,15 @@ INSERT INTO roles (name, description) VALUES ('user', 'Default role for all regi
 INSERT INTO roles (name, description) VALUES ('admin', 'Administrator with full access');
 
 -- Seed: basic permissions
-INSERT INTO permissions (name, description) VALUES ('users:read', 'Can view user profiles');
-INSERT INTO permissions (name, description) VALUES ('users:write', 'Can update own profile');
+INSERT INTO permissions (name, description) VALUES ('profile:read', 'Can view own profile');
+INSERT INTO permissions (name, description) VALUES ('profile:write', 'Can update own profile');
 
--- Seed: "user" role gets users:read, users:write
+-- Seed: "user" role gets profile:read, profile:write
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
-WHERE r.name = 'user' AND p.name IN ('users:read', 'users:write');
+WHERE r.name = 'user' AND p.name IN ('profile:read', 'profile:write');
 
 -- Seed: "admin" role gets all permissions
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
-WHERE r.name = 'admin' AND p.name IN ('users:read', 'users:write');
+WHERE r.name = 'admin' AND p.name IN ('profile:read', 'profile:write');
