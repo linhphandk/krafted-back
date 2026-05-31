@@ -86,6 +86,15 @@ async fn listing_with_category_and_seller(
 #[utoipa::path(
     get,
     path = "/api/listings",
+    params(
+        ("status" = Option<String>, Query, description = "Filter by status (active, draft, paused)"),
+        ("category_id" = Option<String>, Query, description = "Filter by category UUID"),
+        ("kind" = Option<String>, Query, description = "Filter by kind (craft, supply)"),
+        ("search" = Option<String>, Query, description = "Search in title"),
+        ("sort" = Option<String>, Query, description = "Sort order: newest, price_asc, price_desc"),
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("per_page" = Option<i64>, Query, description = "Items per page"),
+    ),
     responses(
         (status = 200, description = "List of listings", body = PaginatedResponse<ListingResponse>),
     ),
@@ -315,6 +324,10 @@ pub async fn pause_listing(
 #[utoipa::path(
     get,
     path = "/api/listings/mine",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("per_page" = Option<i64>, Query, description = "Items per page"),
+    ),
     responses(
         (status = 200, description = "Seller's listings", body = PaginatedResponse<ListingResponse>),
         (status = 401, description = "Unauthorized"),
@@ -356,6 +369,9 @@ pub async fn seller_listings(
 #[utoipa::path(
     get,
     path = "/api/categories",
+    params(
+        ("kind" = Option<String>, Query, description = "Filter by kind (craft, supply)"),
+    ),
     responses(
         (status = 200, description = "List of categories", body = Vec<crate::listing::models::Category>),
     ),
