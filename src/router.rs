@@ -6,6 +6,7 @@ use utoipa_scalar::{Scalar, Servable};
 
 use crate::api_doc::ApiDoc;
 use crate::auth::auth_router;
+use crate::listing::listing_router;
 use crate::state::AppState;
 
 pub fn create_router(state: AppState) -> Router {
@@ -14,6 +15,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api-docs/openapi.json", get(openapi_json))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()))
         .merge(auth_router(&state))
+        .merge(listing_router())
         .with_state(state)
 }
 

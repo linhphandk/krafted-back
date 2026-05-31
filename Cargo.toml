@@ -24,7 +24,7 @@ bcrypt = "0.17"
 jsonwebtoken = "9"
 async-trait = "0.1"
 mockall = "0.12"
-utoipa = { version = "5", features = ["axum_extras"] }
+utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 [dev-dependencies]

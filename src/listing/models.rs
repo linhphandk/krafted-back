@@ -1,9 +1,10 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[derive(Queryable, Selectable, Serialize, ToSchema, Clone, Debug)]
 #[diesel(table_name = crate::schema::categories)]
 pub struct Category {
     pub id: Uuid,
@@ -21,7 +22,7 @@ pub struct NewCategory {
     pub kind: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub enum CategoryKind {
     Craft,
     Supply,
@@ -100,7 +101,7 @@ pub struct UpdateListing {
     pub quantity: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub enum ListingStatus {
     Draft,
     Active,
@@ -143,7 +144,7 @@ impl<'de> Deserialize<'de> for ListingStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub enum ListingCondition {
     Handmade,
     New,
@@ -186,7 +187,7 @@ impl<'de> Deserialize<'de> for ListingCondition {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub enum ListingSort {
     #[default]
     #[serde(rename = "newest")]
@@ -215,7 +216,7 @@ pub struct PaginatedResult<T> {
     pub per_page: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CreateListingRequest {
     pub title: String,
     pub description: String,
@@ -225,7 +226,7 @@ pub struct CreateListingRequest {
     pub quantity: Option<i32>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, ToSchema)]
 pub struct UpdateListingRequest {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -236,7 +237,7 @@ pub struct UpdateListingRequest {
     pub quantity: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ListingResponse {
     pub id: String,
     pub seller_id: String,
@@ -271,8 +272,8 @@ impl ListingResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct PaginatedResponse<T> {
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct PaginatedResponse<T: ToSchema> {
     pub items: Vec<T>,
     pub total: i64,
     pub page: i64,
@@ -280,7 +281,7 @@ pub struct PaginatedResponse<T> {
     pub total_pages: i64,
 }
 
-impl<T> PaginatedResponse<T> {
+impl<T: ToSchema> PaginatedResponse<T> {
     pub fn from_paginated_result(result: PaginatedResult<T>) -> Self {
         let total_pages = if result.total > 0 {
             (result.total + result.per_page - 1) / result.per_page

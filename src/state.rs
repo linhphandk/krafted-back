@@ -1,4 +1,6 @@
 use crate::auth::provider::LocalAuthProvider;
+use crate::listing::repository::{DieselCategoryRepository, DieselListingRepository};
+use crate::listing::service::{CategoryService, ListingService};
 use crate::rbac::repository::DieselRbacRepository;
 use crate::rbac::service::RbacService;
 use crate::session::repository::DieselSessionRepository;
@@ -13,6 +15,8 @@ pub struct AppState {
         DieselUserRepository,
         DieselSessionRepository,
     >,
+    pub listing_service: ListingService<DieselListingRepository, DieselCategoryRepository>,
+    pub category_service: CategoryService<DieselCategoryRepository>,
 }
 
 impl AppState {
@@ -29,6 +33,16 @@ impl AppState {
             7,
             rbac_service,
         );
-        Self { auth_service }
+
+        let category_repo = DieselCategoryRepository::new(pool.clone());
+        let listing_repo = DieselListingRepository::new(pool.clone());
+        let listing_service = ListingService::new(listing_repo, category_repo.clone());
+        let category_service = CategoryService::new(category_repo);
+
+        Self {
+            auth_service,
+            listing_service,
+            category_service,
+        }
     }
 }
