@@ -1,8 +1,8 @@
-# M12 — Admin Seed & RBAC Endpoints
+# M13 — Admin Seed & RBAC Endpoints
 
-**Deliverable: Admin user seeded on startup, RBAC management endpoints (list roles, assign/revoke roles), admin-only middleware guard**
+**Deliverable: bootstrap admin user on startup, expose RBAC management endpoints**
 
-**Depends on: M11**
+**Depends on: M12**
 
 ---
 

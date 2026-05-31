@@ -1,4 +1,4 @@
-# M13 — Auth Middleware
+# M12 — Auth Middleware
 
 **Deliverable: JWT-based AuthUser extractor, protected listing endpoints enforce auth and ownership**
 
