@@ -87,7 +87,7 @@ pub struct NewListing {
     pub quantity: i32,
 }
 
-#[derive(AsChangeset)]
+#[derive(Default, AsChangeset)]
 #[diesel(table_name = crate::schema::listings)]
 #[diesel(treat_none_as_null = false)]
 pub struct UpdateListing {
@@ -213,4 +213,86 @@ pub struct PaginatedResult<T> {
     pub total: i64,
     pub page: i64,
     pub per_page: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateListingRequest {
+    pub title: String,
+    pub description: String,
+    pub price_cents: i32,
+    pub category_id: Uuid,
+    pub condition: ListingCondition,
+    pub quantity: Option<i32>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct UpdateListingRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub price_cents: Option<i32>,
+    pub category_id: Option<Uuid>,
+    pub status: Option<ListingStatus>,
+    pub condition: Option<ListingCondition>,
+    pub quantity: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListingResponse {
+    pub id: String,
+    pub seller_id: String,
+    pub title: String,
+    pub description: String,
+    pub price_cents: i32,
+    pub category_id: String,
+    pub category_name: Option<String>,
+    pub status: String,
+    pub condition: String,
+    pub quantity: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl ListingResponse {
+    pub fn from_listing(listing: &Listing, category_name: Option<String>) -> Self {
+        Self {
+            id: listing.id.to_string(),
+            seller_id: listing.seller_id.to_string(),
+            title: listing.title.clone(),
+            description: listing.description.clone(),
+            price_cents: listing.price_cents,
+            category_id: listing.category_id.to_string(),
+            category_name,
+            status: listing.status.clone(),
+            condition: listing.condition.clone(),
+            quantity: listing.quantity,
+            created_at: listing.created_at.to_string(),
+            updated_at: listing.updated_at.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub total_pages: i64,
+}
+
+impl<T> PaginatedResponse<T> {
+    pub fn from_paginated_result(result: PaginatedResult<T>) -> Self {
+        let total_pages = if result.total > 0 {
+            (result.total + result.per_page - 1) / result.per_page
+        } else {
+            0
+        };
+        Self {
+            items: result.items,
+            total: result.total,
+            page: result.page,
+            per_page: result.per_page,
+            total_pages,
+        }
+    }
 }
