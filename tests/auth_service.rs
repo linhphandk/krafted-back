@@ -3,13 +3,16 @@ use chrono::NaiveDateTime;
 use krafted_back::auth::models::{Tokens, UserInfo};
 use krafted_back::auth::ports::AuthProvider;
 use krafted_back::auth::service::AuthService;
+use krafted_back::rbac::models::Role;
+use krafted_back::rbac::ports::RbacRepository;
+use krafted_back::rbac::service::RbacService;
 use krafted_back::session::models::{NewSession, Session};
 use krafted_back::session::ports::SessionRepository;
 use krafted_back::shared::errors::{AppError, AppResult};
 use krafted_back::user::models::{NewUser, User};
 use krafted_back::user::ports::UserRepository;
-use krafted_back::user::service::UserService;
 use mockall::mock;
+use std::sync::Arc;
 use uuid::Uuid;
 
 mock! {
@@ -46,6 +49,18 @@ mock! {
         async fn create(&self, session: NewSession) -> AppResult<Session>;
         async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>>;
         async fn revoke(&self, token: &str) -> AppResult<()>;
+    }
+}
+
+mock! {
+    pub MockRbacRepo {}
+
+    #[async_trait]
+    impl RbacRepository for MockRbacRepo {
+        async fn find_role_by_name(&self, name: &str) -> AppResult<Option<Role>>;
+        async fn assign_role(&self, user_id: Uuid, role_id: Uuid) -> AppResult<()>;
+        async fn get_user_role_ids(&self, user_id: Uuid) -> AppResult<Vec<Uuid>>;
+        async fn get_permission_names_by_role_ids(&self, role_ids: &[Uuid]) -> AppResult<Vec<String>>;
     }
 }
 
@@ -88,12 +103,32 @@ fn fake_tokens() -> Tokens {
     }
 }
 
+fn fake_rbac_service() -> Arc<RbacService> {
+    let mut mock_repo = MockMockRbacRepo::new();
+    mock_repo
+        .expect_find_role_by_name()
+        .with(mockall::predicate::eq("user"))
+        .returning(|_| {
+            Ok(Some(Role {
+                id: Uuid::new_v4(),
+                name: "user".to_string(),
+                description: Some("Default".to_string()),
+                created_at: chrono::Utc::now().naive_utc(),
+            }))
+        });
+    mock_repo
+        .expect_assign_role()
+        .returning(|_, _| Ok(()));
+    Arc::new(RbacService::new(Arc::new(mock_repo)))
+}
+
 fn new_service() -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo> {
     AuthService::new(
         MockMockAuthProvider::new(),
         MockMockUserRepo::new(),
         MockMockSessionRepo::new(),
         7,
+        fake_rbac_service(),
     )
 }
 
@@ -102,7 +137,7 @@ fn new_service_with_mocks(
     user: MockMockUserRepo,
     session: MockMockSessionRepo,
 ) -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo> {
-    AuthService::new(auth, user, session, 7)
+    AuthService::new(auth, user, session, 7, fake_rbac_service())
 }
 
 #[tokio::test]
@@ -115,7 +150,7 @@ async fn test_register_success() {
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo.expect_create().returning(|_| Ok(fake_user()));
 
-    let service = AuthService::new(mock_auth, mock_repo, MockMockSessionRepo::new(), 7);
+    let service = AuthService::new(mock_auth, mock_repo, MockMockSessionRepo::new(), 7, fake_rbac_service());
     let result = service
         .register(
             "test@example.com".to_string(),
@@ -168,7 +203,7 @@ async fn test_login_success() {
     let mut mock_session = MockMockSessionRepo::new();
     mock_session.expect_create().returning(|_| Ok(fake_session()));
 
-    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7);
+    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7, fake_rbac_service());
     let result = service
         .login("test@example.com".to_string(), "password123".to_string())
         .await;
@@ -188,6 +223,7 @@ async fn test_login_user_not_found() {
         mock_repo,
         MockMockSessionRepo::new(),
         7,
+        fake_rbac_service(),
     );
     let result = service
         .login("nope@example.com".to_string(), "password123".to_string())
@@ -205,6 +241,7 @@ async fn test_logout_success() {
         MockMockUserRepo::new(),
         mock_session,
         7,
+        fake_rbac_service(),
     );
     let result = service.logout("test-refresh".to_string()).await;
     assert!(result.is_ok());
@@ -239,7 +276,7 @@ async fn test_refresh_token_success() {
     mock_session.expect_revoke().returning(|_| Ok(())).times(1);
     mock_session.expect_create().returning(|_| Ok(fake_session()));
 
-    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7);
+    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7, fake_rbac_service());
     let result = service.refresh_token("old-refresh".to_string()).await;
     assert!(result.is_ok());
     let (user, tokens) = result.unwrap();
@@ -258,6 +295,7 @@ async fn test_refresh_token_invalid() {
         MockMockUserRepo::new(),
         mock_session,
         7,
+        fake_rbac_service(),
     );
     let result = service.refresh_token("bad".to_string()).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
@@ -281,6 +319,7 @@ async fn test_refresh_token_expired() {
         MockMockUserRepo::new(),
         mock_session,
         7,
+        fake_rbac_service(),
     );
     let result = service.refresh_token("expired".to_string()).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
@@ -303,6 +342,7 @@ async fn test_get_current_user_success() {
         mock_repo,
         MockMockSessionRepo::new(),
         7,
+        fake_rbac_service(),
     );
     let result = service.get_current_user("valid-jwt".to_string()).await;
     assert!(result.is_ok());
@@ -321,6 +361,7 @@ async fn test_get_current_user_invalid_token() {
         MockMockUserRepo::new(),
         MockMockSessionRepo::new(),
         7,
+        fake_rbac_service(),
     );
     let result = service.get_current_user("bad".to_string()).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
