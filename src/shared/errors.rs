@@ -3,6 +3,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
 use thiserror::Error;
+use tracing::{error, warn};
 use utoipa::ToSchema;
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -31,15 +32,31 @@ pub struct ErrorResponse {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
-            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
-            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
-            AppError::Internal => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal error".to_string(),
-            ),
+            AppError::BadRequest(msg) => {
+                warn!(status = ?StatusCode::BAD_REQUEST, "Bad request");
+                (StatusCode::BAD_REQUEST, msg.clone())
+            }
+            AppError::NotFound(msg) => {
+                warn!(status = ?StatusCode::NOT_FOUND, "Resource not found");
+                (StatusCode::NOT_FOUND, msg.clone())
+            }
+            AppError::Unauthorized(msg) => {
+                warn!(status = ?StatusCode::UNAUTHORIZED, "Unauthorized");
+                (StatusCode::UNAUTHORIZED, msg.clone())
+            }
+            AppError::Forbidden(msg) => {
+                warn!(status = ?StatusCode::FORBIDDEN, "Forbidden");
+                (StatusCode::FORBIDDEN, msg.clone())
+            }
+            AppError::Internal => {
+                error!("Internal server error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal error".to_string(),
+                )
+            }
             AppError::NotImplemented => {
+                warn!(status = ?StatusCode::NOT_IMPLEMENTED, "Not implemented");
                 (StatusCode::NOT_IMPLEMENTED, "Not implemented".to_string())
             }
         };

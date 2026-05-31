@@ -3,6 +3,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
+use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::shared::errors::AppResult;
@@ -64,10 +65,12 @@ pub struct UserResponse {
     ),
     tag = "auth",
 )]
+#[instrument(skip(state, req), fields(email = %req.email))]
 pub async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> AppResult<(StatusCode, Json<RegisterResponse>)> {
+    info!("register endpoint called");
     let (user, tokens) = state
         .auth_service
         .register(req.email, req.name, req.password)
@@ -93,7 +96,9 @@ pub async fn register(
     ),
     tag = "auth",
 )]
+#[instrument(skip_all, fields(user_id = %user.id))]
 pub async fn me(Extension(user): Extension<AuthenticatedUser>) -> impl IntoResponse {
+    info!("me endpoint called");
     let response = UserResponse {
         id: user.id.to_string(),
         email: user.email,
@@ -112,10 +117,12 @@ pub async fn me(Extension(user): Extension<AuthenticatedUser>) -> impl IntoRespo
     ),
     tag = "auth",
 )]
+#[instrument(skip(state, req), fields(email = %req.email))]
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> AppResult<(StatusCode, Json<LoginResponse>)> {
+    info!("login endpoint called");
     let (user, tokens) = state.auth_service.login(req.email, req.password).await?;
     let response = LoginResponse {
         user: UserResponse {
@@ -140,10 +147,12 @@ pub async fn login(
     ),
     tag = "auth",
 )]
+#[instrument(skip(state, req))]
 pub async fn logout(
     State(state): State<AppState>,
     Json(req): Json<LogoutRequest>,
 ) -> AppResult<StatusCode> {
+    info!("logout endpoint called");
     state.auth_service.logout(req.refresh_token).await?;
     Ok(StatusCode::OK)
 }
@@ -171,10 +180,12 @@ pub struct RefreshResponse {
     ),
     tag = "auth",
 )]
+#[instrument(skip(state, req))]
 pub async fn refresh(
     State(state): State<AppState>,
     Json(req): Json<RefreshRequest>,
 ) -> AppResult<(StatusCode, Json<RefreshResponse>)> {
+    info!("refresh token endpoint called");
     let (user, tokens) = state.auth_service.refresh_token(req.refresh_token).await?;
     let response = RefreshResponse {
         user: UserResponse {

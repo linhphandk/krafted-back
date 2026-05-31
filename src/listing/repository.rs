@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use tracing::{debug, instrument};
 use uuid::Uuid;
 
 use crate::listing::models::{
@@ -35,7 +36,9 @@ impl DieselListingRepository {
 
 #[async_trait]
 impl CategoryRepository for DieselCategoryRepository {
+    #[instrument(skip(self))]
     async fn find_all(&self) -> AppResult<Vec<Category>> {
+        debug!("find_all categories");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -46,7 +49,9 @@ impl CategoryRepository for DieselCategoryRepository {
         })
     }
 
+    #[instrument(skip(self), fields(category_id = %id))]
     async fn find_by_id(&self, id: Uuid) -> AppResult<Option<Category>> {
+        debug!("find_by_id category");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -61,7 +66,9 @@ impl CategoryRepository for DieselCategoryRepository {
             })
     }
 
+    #[instrument(skip(self), fields(kind))]
     async fn find_by_kind(&self, kind: &str) -> AppResult<Vec<Category>> {
+        debug!(kind, "find_by_kind categories");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -78,7 +85,9 @@ impl CategoryRepository for DieselCategoryRepository {
 
 #[async_trait]
 impl ListingRepository for DieselListingRepository {
+    #[instrument(skip(self, listing), fields(title = %listing.title))]
     async fn create(&self, listing: NewListing) -> AppResult<Listing> {
+        debug!("create listing");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -92,7 +101,9 @@ impl ListingRepository for DieselListingRepository {
             })
     }
 
+    #[instrument(skip(self), fields(listing_id = %id))]
     async fn find_by_id(&self, id: Uuid) -> AppResult<Option<Listing>> {
+        debug!("find_by_id listing");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -107,12 +118,14 @@ impl ListingRepository for DieselListingRepository {
             })
     }
 
+    #[instrument(skip(self), fields(?filters, page, per_page))]
     async fn find_all(
         &self,
         filters: ListingFilters,
         page: i64,
         per_page: i64,
     ) -> AppResult<PaginatedResult<Listing>> {
+        debug!(?filters, page, per_page, "find_all listings");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -191,12 +204,14 @@ impl ListingRepository for DieselListingRepository {
         })
     }
 
+    #[instrument(skip(self), fields(seller_id = %seller_id, page, per_page))]
     async fn find_by_seller(
         &self,
         seller_id: Uuid,
         page: i64,
         per_page: i64,
     ) -> AppResult<PaginatedResult<Listing>> {
+        debug!(seller_id = %seller_id, page, per_page, "find_by_seller");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -231,7 +246,9 @@ impl ListingRepository for DieselListingRepository {
         })
     }
 
+    #[instrument(skip(self, data), fields(listing_id = %id))]
     async fn update(&self, id: Uuid, data: UpdateListing) -> AppResult<Listing> {
+        debug!(listing_id = %id, "update listing");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -250,7 +267,9 @@ impl ListingRepository for DieselListingRepository {
             })
     }
 
+    #[instrument(skip(self), fields(listing_id = %id))]
     async fn delete(&self, id: Uuid) -> AppResult<()> {
+        debug!(listing_id = %id, "delete listing");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -267,7 +286,9 @@ impl ListingRepository for DieselListingRepository {
         Ok(())
     }
 
+    #[instrument(skip(self), fields(seller_id = %seller_id))]
     async fn count_by_seller(&self, seller_id: Uuid) -> AppResult<i64> {
+        debug!(seller_id = %seller_id, "count_by_seller");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
