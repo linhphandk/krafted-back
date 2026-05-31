@@ -1,4 +1,4 @@
-# M9 — Listing Domain: Migrations + Models + Schema
+# M8 — Listing Domain: Migrations + Models + Schema
 
 **Deliverable: Diesel migrations for categories/listings, domain models, schema generated, new error variants**
 

@@ -2,7 +2,7 @@
 
 **Deliverable: JWT-based AuthUser extractor, protected listing endpoints enforce auth and ownership**
 
-**Depends on: M12**
+**Depends on: M11**
 
 ---
 

@@ -1,8 +1,8 @@
-# M8 — Testing & Documentation
+# M14 — Testing & Documentation
 
 **Deliverable: Unit tests for all services, integration tests for all repositories and E2E flows, OpenAPI/Swagger docs complete, Docker Compose runs the full stack**
 
-**Depends on: M7.1**
+**Depends on: M12**
 
 ---
 
@@ -117,7 +117,7 @@ Expand existing tests:
 
 **File**: `src/shared/errors.rs` (expand)
 
-Add missing error variants that are needed by M6/M7.1:
+Add missing error variants that are needed by M6/M12:
 
 ```rust
 #[derive(Debug, Error)]
@@ -183,7 +183,7 @@ Ensure this is git hook-ready. Add to `.husky/pre-commit` or equivalent.
 
 **File**: `src/api_doc.rs`
 
-Ensure all endpoints from M5, M6, M7.1 are documented:
+Ensure all endpoints from M5, M6, M12 are documented:
 
 ```rust
 #[derive(OpenApi)]

@@ -1,8 +1,8 @@
-# M10 — Listing Domain: Ports + Repositories
+# M9 — Listing Domain: Ports + Repositories
 
 **Deliverable: CategoryRepository, ListingRepository traits and Diesel implementations, integration tests**
 
-**Depends on: M9**
+**Depends on: M8**
 
 ---
 

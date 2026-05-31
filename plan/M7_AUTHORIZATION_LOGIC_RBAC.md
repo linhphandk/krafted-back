@@ -243,5 +243,5 @@ After completing all tasks, you should be able to:
 5. `rbac_service.get_user_permissions(user_id)` → `("user", ["users:read"])` for a regular user
 6. After admin assigns `admin` role → `get_user_permissions()` returns `("admin", ["users:read", "users:write", "roles:read", "roles:write"])`
 7. Auth middleware extracts both `role` and `permissions` from database after JWT validation
-8. No RBAC endpoints yet (no GET/POST for roles or permissions) — that's M7.1
-9. No admin seed user yet — that's M7.1
+8. No RBAC endpoints yet (no GET/POST for roles or permissions) — that's M12
+9. No admin seed user yet — that's M12
