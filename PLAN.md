@@ -61,15 +61,15 @@ migrations/              # Diesel migrations
 ┌──────────────────┐
 │  Controller.rs   │  Axum handlers, routes, DTOs
 └────────┬─────────┘
-         │
+          │
 ┌────────▼─────────┐
 │    Service.rs     │  Business logic, depends on port traits
 └────────┬─────────┘
-         │
+          │
 ┌────────▼─────────┐
 │     Ports.rs     │  Trait definitions (interfaces)
 └────────┬─────────┘
-         │ impl
+          │ impl
 ┌────────▼─────────┐
 │  Repository.rs   │  Adapters: Diesel queries, Local Auth logic
 └──────────────────┘
@@ -81,6 +81,10 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 ## Milestones
 
+See `plan/` directory for detailed specs.
+
+### Auth Template
+
 - [x] [M1 — Project Scaffolding & Core Architecture](plan/M1_PROJECT_SCAFFOLDING_CORE_ARCHITECTURE.md)
 - [x] [M2 — Database & Repository Layer](plan/M2_DATABASE_REPOSITORY_LAYER.md)
 - [x] [M3 — Local Auth Implementation](plan/M3_LOCAL_AUTH_IMPLEMENTATION.md)
@@ -91,7 +95,7 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 - [ ] [M7.1 — Admin Seed & RBAC Endpoints](plan/M7.1_ADMIN_SEED_RBAC_ENDPOINTS.md)
 - [ ] [M8 — Testing & Documentation](plan/M8_TESTING_DOCUMENTATION.md)
 
-## Marketplace Features
+### Marketplace
 
 - [ ] [M9 — Listing Domain: Migrations + Models + Schema](plan/M9_LISTINGS_MIGRATIONS_MODELS.md)
 - [ ] [M10 — Listing Domain: Ports + Repositories](plan/M10_LISTINGS_PORTS_REPOSITORIES.md)
@@ -118,50 +122,6 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 | User management | Soft delete | `is_active = false`, not row removal |
 | API documentation | utoipa + Scalar | Auto-generated from code, interactive UI |
 
-## Port Interfaces (Trait Definitions)
-
-```rust
-// src/auth/ports.rs
-pub trait AuthProvider: Send + Sync {
-    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
-    async fn login(&self, email: &str, password: &str, password_hash: &str, role: &str) -> AppResult<(Tokens, UserInfo)>;
-    async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
-    async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
-    async fn revoke_token(&self, token: &str) -> AppResult<()>;
-    async fn generate_access_token(&self, user_id: &str, email: &str, role: &str) -> AppResult<String>;
-    fn token_expiry_seconds(&self) -> u64;
-}
-
-// src/user/ports.rs
-pub trait UserRepository: Send + Sync {
-    async fn create(&self, user: NewUser) -> AppResult<User>;
-    async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
-    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>>;
-    async fn list(&self, page: i64, per_page: i64) -> AppResult<Vec<User>>;
-    async fn count(&self) -> AppResult<i64>;
-    async fn update(&self, id: Uuid, data: UpdateUser) -> AppResult<User>;
-    async fn soft_delete(&self, id: Uuid) -> AppResult<()>;
-}
-
-// src/session/ports.rs
-pub trait SessionRepository: Send + Sync {
-    async fn create(&self, session: NewSession) -> AppResult<Session>;
-    async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>>;
-    async fn revoke(&self, token: &str) -> AppResult<()>;
-}
-
-// src/rbac/ports.rs
-pub trait RbacRepository: Send + Sync {
-    async fn find_role_by_name(&self, name: &str) -> AppResult<Option<Role>>;
-    async fn find_role_by_id(&self, id: Uuid) -> AppResult<Option<Role>>;
-    async fn assign_role(&self, user_id: Uuid, role_id: Uuid) -> AppResult<()>;
-    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> AppResult<()>;
-    async fn get_user_role_ids(&self, user_id: Uuid) -> AppResult<Vec<Uuid>>;
-    async fn get_permission_names_by_role_ids(&self, role_ids: &[Uuid]) -> AppResult<Vec<String>>;
-    async fn list_roles(&self) -> AppResult<Vec<Role>>;
-}
-```
-
 ## Adapters (Implementations)
 
 | Port | Adapter | Location | Technology |
@@ -171,54 +131,7 @@ pub trait RbacRepository: Send + Sync {
 | `SessionRepository` | `DieselSessionRepository` | `src/session/repository.rs` | Diesel + PostgreSQL |
 | `RbacRepository` | `DieselRbacRepository` | `src/rbac/repository.rs` | Diesel + PostgreSQL |
 
-## Marketplace Data Model
-
-### categories
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID PK | gen_random_uuid() |
-| name | VARCHAR(100) NOT NULL | |
-| slug | VARCHAR(100) NOT NULL UNIQUE | |
-| kind | VARCHAR(20) NOT NULL | 'craft' or 'supply' |
-| created_at | TIMESTAMP DEFAULT NOW() | |
-
-### listings
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID PK | gen_random_uuid() |
-| seller_id | UUID NOT NULL → users.id | ON DELETE CASCADE |
-| title | VARCHAR(255) NOT NULL | |
-| description | TEXT NOT NULL DEFAULT '' | |
-| price_cents | INTEGER NOT NULL | Price in cents |
-| category_id | UUID NOT NULL → categories.id | |
-| status | VARCHAR(20) NOT NULL DEFAULT 'draft' | draft/active/paused/closed |
-| condition | VARCHAR(20) NOT NULL DEFAULT 'handmade' | handmade/new/vintage/refurbished |
-| quantity | INTEGER NOT NULL DEFAULT 1 | |
-| created_at | TIMESTAMP DEFAULT NOW() | |
-| updated_at | TIMESTAMP DEFAULT NOW() | |
-
-## Marketplace Port Interfaces
-
-```rust
-// src/listing/ports.rs
-pub trait CategoryRepository: Send + Sync {
-    async fn find_all(&self) -> AppResult<Vec<Category>>;
-    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<Category>>;
-    async fn find_by_kind(&self, kind: &str) -> AppResult<Vec<Category>>;
-}
-
-pub trait ListingRepository: Send + Sync {
-    async fn create(&self, listing: NewListing) -> AppResult<Listing>;
-    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<Listing>>;
-    async fn find_all(&self, filters: ListingFilters, page: i64, per_page: i64) -> AppResult<PaginatedResult<Listing>>;
-    async fn find_by_seller(&self, seller_id: Uuid, page: i64, per_page: i64) -> AppResult<PaginatedResult<Listing>>;
-    async fn update(&self, id: Uuid, data: UpdateListing) -> AppResult<Listing>;
-    async fn delete(&self, id: Uuid) -> AppResult<()>;
-    async fn count_by_seller(&self, seller_id: Uuid) -> AppResult<i64>;
-}
-```
-
-## Dependency Graph (with Marketplace)
+## Dependency Graph
 
 ```
 krafted-back:
