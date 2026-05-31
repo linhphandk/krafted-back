@@ -139,12 +139,30 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 - [ ] Middleware: auth guard (verify JWT), RBAC guard (check permissions)
 - [ ] Error handling: map domain errors to proper HTTP responses
 
-### M7 — Authorization Logic (RBAC + ABAC)
-- [ ] Define seed data: default roles (`admin`, `user`, `editor`) and permissions
-- [ ] Implement permission checks in service layer
-- [ ] Implement ABAC policies as needed (resource-level checks)
-- [ ] Middleware to extract roles/permissions from JWT claims
-- [ ] Admin-only endpoints enforced
+### M7 — Authorization Logic (RBAC)
+- [ ] Create migration: `roles`, `permissions`, `user_roles`, `role_permissions` tables with FK constraints
+- [ ] Seed data: `user` role, `admin` role, `users:read` + `users:write` permissions
+- [ ] Seed `role_permissions`: `user` role gets `users:read` + `users:write`; `admin` role gets all
+- [ ] RBAC models: `Role`, `Permission`, `UserRole`, `RolePermission`
+- [ ] `RbacRepository` trait: `find_role_by_name()`, `assign_role()`, `get_user_role_ids()`, `get_permission_names_by_role_ids()`
+- [ ] `DieselRbacRepository` adapter (2-query strategy, no JOINs — subquery for permissions)
+- [ ] `RbacService`: `assign_default_role()`, `get_user_permissions()`
+- [ ] On register: assign `user` role via `RbacService.assign_default_role()`
+- [ ] On login/refresh: load role + permissions via `get_user_permissions()`, embed in JWT claims
+- [ ] Update `AuthProvider.generate_access_token()` to accept role + permissions
+- [ ] Update `LocalAuthProvider` to include `role` and `permissions` in JWT claims
+- [ ] Update `AuthenticatedUser` to include `role: String` and `permissions: Vec<String>`
+- [ ] Update auth middleware to extract role + permissions from JWT
+- [ ] Tests: register → role assigned, login → JWT has correct claims
+- [ ] No RBAC endpoints yet (no GET/POST for roles or permissions)
+- [ ] No admin seed user yet
+
+### M7.1 — Admin Seed & RBAC Endpoints (Future)
+- [ ] Seed admin user on startup (env-var configured email/password)
+- [ ] `POST /api/users/:id/roles` — assign role (admin-only)
+- [ ] `DELETE /api/users/:id/roles/:role` — revoke role (admin-only)
+- [ ] Admin-only middleware guard
+- [ ] Permission enforcement in handlers
 
 ### M8 — Testing & Documentation
 - [ ] Unit tests: service layer (mock repositories via ports)
@@ -165,6 +183,10 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 | Session strategy | Refresh token in DB | Revocation support, rotation |
 | Repository pattern | Diesel with traits | Type-safe, testable |
 | Config | dotenv + envy | Typed, validated config |
+| RBAC query strategy | 2 queries (subquery, no JOINs) | Simplicity over performance |
+| RBAC token strategy | Role + permissions in JWT | No DB lookup per request, refresh on login/refresh |
+| RBAC endpoints | Deferred to M7.1 | No role CRUD endpoints needed yet |
+| Default role on register | Always `user` | Simplest, no admin check at registration |
 
 ## Port Interfaces (Trait Definitions)
 
@@ -196,11 +218,13 @@ pub trait SessionRepository: Send + Sync {
 
 // src/rbac/ports.rs
 pub trait RbacRepository: Send + Sync {
+    async fn find_role_by_name(&self, name: &str) -> Result<Option<Role>>;
     async fn assign_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()>;
-    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()>;
-    async fn get_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>>;
-    async fn has_permission(&self, user_id: Uuid, permission: &str) -> Result<bool>;
+    async fn get_user_role_ids(&self, user_id: Uuid) -> Result<Vec<Uuid>>;
+    async fn get_permission_names_by_role_ids(&self, role_ids: &[Uuid]) -> Result<Vec<String>>;
 }
+// 2-query strategy: get_user_role_ids() → get_permission_names_by_role_ids()
+// No JOINs — subquery in permissions lookup
 ```
 
 ## Adapters (Implementations)
@@ -220,7 +244,8 @@ src/auth/controller.rs
 src/auth/service.rs
          ↓  (depends on traits)
          ├─ src/auth/ports.rs  ←  src/auth/repository.rs (adapter impl)
-         └─ src/user/ports.rs  ←  src/user/repository.rs (adapter impl)
+         ├─ src/user/ports.rs  ←  src/user/repository.rs (adapter impl)
+         └─ src/rbac/ports.rs  ←  src/rbac/repository.rs (adapter impl)
 
 src/user/controller.rs
          ↓
@@ -228,5 +253,7 @@ src/user/service.rs
          ↓  (depends on traits)
 src/user/ports.rs  ←  src/user/repository.rs (adapter impl)
 
-(same pattern for session/, rbac/)
+src/rbac/service.rs
+         ↓  (depends on traits)
+src/rbac/ports.rs  ←  src/rbac/repository.rs (adapter impl)
 ```
