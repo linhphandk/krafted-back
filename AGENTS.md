@@ -1,10 +1,11 @@
 # Development Guidelines
 
 ## Workflow
-- Implement features **vertically** (end-to-end) within a single domain/module
-- Split by layer: migrations+repository → service → controller
+- Implement features **by layer** within a single domain/module
+- Split PRs by layer: migration → models → ports → repository → service → controller
 - Each PR should be small, focused, and independently reviewable
-- **Always stop after completing a task** for PR review — do not continue to the next task without approval
+- **Always stop after completing a layer** for PR review — do not continue to the next layer without approval
+- **Tests required for each layer**: repository integration tests, service unit tests with mocks
 
 ## Architecture
 - Ports & Adapters (Hexagonal), Domain-Scoped
