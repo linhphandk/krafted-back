@@ -241,6 +241,7 @@ pub struct UpdateListingRequest {
 pub struct ListingResponse {
     pub id: String,
     pub seller_id: String,
+    pub seller_name: Option<String>,
     pub title: String,
     pub description: String,
     pub price_cents: i32,
@@ -254,10 +255,15 @@ pub struct ListingResponse {
 }
 
 impl ListingResponse {
-    pub fn from_listing(listing: &Listing, category_name: Option<String>) -> Self {
+    pub fn from_listing(
+        listing: &Listing,
+        category_name: Option<String>,
+        seller_name: Option<String>,
+    ) -> Self {
         Self {
             id: listing.id.to_string(),
             seller_id: listing.seller_id.to_string(),
+            seller_name,
             title: listing.title.clone(),
             description: listing.description.clone(),
             price_cents: listing.price_cents,
