@@ -55,6 +55,9 @@ async fn test_register_creates_user_in_db_with_hashed_password_and_tokens() {
 
     let role_ids = rbac_repo.get_user_role_ids(user.id).await.unwrap();
     assert_eq!(role_ids.len(), 1);
+
+    let user_role = rbac_repo.find_role_by_name("user").await.unwrap().unwrap();
+    assert_eq!(role_ids[0], user_role.id);
 }
 
 #[tokio::test]
