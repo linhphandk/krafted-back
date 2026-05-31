@@ -197,7 +197,7 @@ pub enum ListingSort {
     PriceDesc,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct ListingFilters {
     pub status: Option<String>,
     pub category_id: Option<Uuid>,
