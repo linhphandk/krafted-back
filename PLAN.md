@@ -1,4 +1,4 @@
-# krafted-back — Auth Template Plan
+# krafted-back — Implementation Plan
 
 ## Stack
 - **Language**: Rust
