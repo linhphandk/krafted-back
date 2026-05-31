@@ -1,0 +1,16 @@
+INSERT INTO categories (name, slug, kind) VALUES
+  ('Pottery & Ceramics', 'pottery-ceramics', 'craft'),
+  ('Jewelry', 'jewelry', 'craft'),
+  ('Woodworking', 'woodworking', 'craft'),
+  ('Knitting & Crochet', 'knitting-crochet', 'craft'),
+  ('Painting & Art', 'painting-art', 'craft'),
+  ('Leathercraft', 'leathercraft', 'craft'),
+  ('Candles & Soap', 'candles-soap', 'craft'),
+  ('Paper Crafts', 'paper-crafts', 'craft'),
+  ('Yarn & Fiber', 'yarn-fiber', 'supply'),
+  ('Fabric & Textiles', 'fabric-textiles', 'supply'),
+  ('Beads & Jewelry Supplies', 'beads-jewelry-supplies', 'supply'),
+  ('Paint & Brushes', 'paint-brushes', 'supply'),
+  ('Clay & Ceramics Supplies', 'clay-ceramics-supplies', 'supply'),
+  ('Tools & Equipment', 'tools-equipment', 'supply'),
+  ('Patterns & Templates', 'patterns-templates', 'supply');
