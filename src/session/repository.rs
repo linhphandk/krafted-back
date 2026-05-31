@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
+use tracing::{debug, instrument};
 
 use crate::schema::sessions;
 use crate::session::models::{NewSession, Session};
@@ -20,7 +21,9 @@ impl DieselSessionRepository {
 
 #[async_trait]
 impl SessionRepository for DieselSessionRepository {
+    #[instrument(skip(self, session), fields(user_id = %session.user_id))]
     async fn create(&self, session: NewSession) -> AppResult<Session> {
+        debug!("create session");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -34,7 +37,9 @@ impl SessionRepository for DieselSessionRepository {
             })
     }
 
+    #[instrument(skip(self))]
     async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>> {
+        debug!("find_by_token");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal
@@ -49,7 +54,9 @@ impl SessionRepository for DieselSessionRepository {
             })
     }
 
+    #[instrument(skip(self))]
     async fn revoke(&self, token: &str) -> AppResult<()> {
+        debug!("revoke session");
         let mut conn = self.pool.get().map_err(|e| {
             tracing::error!("Connection pool error: {:?}", e);
             AppError::Internal

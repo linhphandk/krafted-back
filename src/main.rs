@@ -10,6 +10,8 @@ use tower_http::cors::{Any, CorsLayer};
 async fn main() {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
+        .compact()
+        .with_target(false)
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 

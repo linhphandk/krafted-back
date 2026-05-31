@@ -2,6 +2,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use serde::Deserialize;
+use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
 use crate::listing::models::{
@@ -33,12 +34,16 @@ pub struct PageQuery {
     pub per_page: Option<i64>,
 }
 
+#[instrument(skip_all)]
 fn extract_seller_id(headers: &HeaderMap) -> AppResult<Uuid> {
-    headers
+    let result = headers
         .get("x-seller-id")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| Uuid::parse_str(s).ok())
-        .ok_or_else(|| AppError::Unauthorized("Missing x-seller-id header".to_string()))
+        .and_then(|s| Uuid::parse_str(s).ok());
+    if result.is_none() {
+        warn!("missing or invalid x-seller-id header");
+    }
+    result.ok_or_else(|| AppError::Unauthorized("Missing x-seller-id header".to_string()))
 }
 
 async fn get_category_name(state: &AppState, category_id: Uuid) -> Option<String> {
@@ -74,6 +79,7 @@ async fn listing_with_category(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state), fields(search = ?query.search, sort = ?query.sort, page, per_page))]
 pub async fn list_listings(
     State(state): State<AppState>,
     Query(query): Query<ListListingsQuery>,
@@ -94,6 +100,8 @@ pub async fn list_listings(
             _ => ListingSort::Newest,
         })
         .unwrap_or(ListingSort::Newest);
+
+    info!(page, per_page, ?kind, "list_listings");
 
     let filters = ListingFilters {
         status: query.status,
@@ -132,10 +140,12 @@ pub async fn list_listings(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state), fields(listing_id = %id))]
 pub async fn get_listing(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ListingResponse>> {
+    info!("get_listing");
     let listing = state.listing_service.get_listing(id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     Ok(Json(to_listing_response(listing, category_name)))
@@ -152,12 +162,14 @@ pub async fn get_listing(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state, headers, req), fields(title = %req.title))]
 pub async fn create_listing(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<CreateListingRequest>,
 ) -> AppResult<(StatusCode, Json<ListingResponse>)> {
     let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, "create_listing");
     let listing = state.listing_service.create_listing(seller_id, req).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     Ok((
@@ -179,6 +191,7 @@ pub async fn create_listing(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state, headers, req), fields(listing_id = %id))]
 pub async fn update_listing(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -186,6 +199,7 @@ pub async fn update_listing(
     Json(req): Json<UpdateListingRequest>,
 ) -> AppResult<Json<ListingResponse>> {
     let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, "update_listing");
     let listing = state
         .listing_service
         .update_listing(id, seller_id, req)
@@ -205,12 +219,14 @@ pub async fn update_listing(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state, headers), fields(listing_id = %id))]
 pub async fn delete_listing(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> AppResult<StatusCode> {
     let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, "delete_listing");
     state.listing_service.delete_listing(id, seller_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -226,12 +242,14 @@ pub async fn delete_listing(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state, headers), fields(listing_id = %id))]
 pub async fn publish_listing(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ListingResponse>> {
     let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, "publish_listing");
     let listing = state.listing_service.publish_listing(id, seller_id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     Ok(Json(to_listing_response(listing, category_name)))
@@ -248,12 +266,14 @@ pub async fn publish_listing(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state, headers), fields(listing_id = %id))]
 pub async fn pause_listing(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ListingResponse>> {
     let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, "pause_listing");
     let listing = state.listing_service.pause_listing(id, seller_id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     Ok(Json(to_listing_response(listing, category_name)))
@@ -268,6 +288,7 @@ pub async fn pause_listing(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state, headers), fields(page, per_page))]
 pub async fn seller_listings(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -276,6 +297,8 @@ pub async fn seller_listings(
     let seller_id = extract_seller_id(&headers)?;
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 100);
+
+    info!(seller_id = %seller_id, page, per_page, "seller_listings");
 
     let result = state
         .listing_service
@@ -305,12 +328,14 @@ pub async fn seller_listings(
     ),
     tag = "listings",
 )]
+#[instrument(skip(state), fields(kind = ?query.kind))]
 pub async fn list_categories(
     State(state): State<AppState>,
     Query(query): Query<ListCategoriesQuery>,
 ) -> AppResult<Json<Vec<crate::listing::models::Category>>> {
     match query.kind {
         Some(kind) => {
+            info!(kind, "list_categories filtered");
             let categories = state
                 .category_service
                 .list_categories_by_kind(&kind)
@@ -318,6 +343,7 @@ pub async fn list_categories(
             Ok(Json(categories))
         }
         None => {
+            info!("list_categories all");
             let categories = state.category_service.list_categories().await?;
             Ok(Json(categories))
         }

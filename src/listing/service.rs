@@ -1,3 +1,4 @@
+use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::listing::models::{
@@ -21,15 +22,21 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
         }
     }
 
+    #[instrument(skip(self, req), fields(seller_id = %seller_id, title = %req.title))]
     pub async fn create_listing(
         &self,
         seller_id: Uuid,
         req: CreateListingRequest,
     ) -> AppResult<Listing> {
         if req.title.trim().is_empty() {
+            warn!("create_listing rejected: empty title");
             return Err(AppError::BadRequest("Title cannot be empty".to_string()));
         }
         if req.price_cents <= 0 {
+            warn!(
+                price_cents = req.price_cents,
+                "create_listing rejected: non-positive price"
+            );
             return Err(AppError::BadRequest(
                 "Price must be greater than 0".to_string(),
             ));
@@ -40,6 +47,7 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
             .await?
             .is_none()
         {
+            warn!(category_id = %req.category_id, "create_listing rejected: category not found");
             return Err(AppError::BadRequest("Category not found".to_string()));
         }
 
@@ -54,39 +62,61 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
             quantity: req.quantity.unwrap_or(1),
         };
 
-        self.listing_repo.create(new_listing).await
+        let listing = self.listing_repo.create(new_listing).await;
+        if let Ok(ref l) = listing {
+            info!(listing_id = %l.id, "listing created");
+        }
+        listing
     }
 
+    #[instrument(skip(self), fields(listing_id = %id))]
     pub async fn get_listing(&self, id: Uuid) -> AppResult<Listing> {
-        self.listing_repo
-            .find_by_id(id)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Listing not found".to_string()))
+        self.listing_repo.find_by_id(id).await?.ok_or_else(|| {
+            warn!(listing_id = %id, "get_listing: not found");
+            AppError::NotFound("Listing not found".to_string())
+        })
     }
 
+    #[instrument(skip(self), fields(page, per_page))]
     pub async fn list_listings(
         &self,
         mut filters: ListingFilters,
         page: i64,
         per_page: i64,
     ) -> AppResult<PaginatedResult<Listing>> {
+        debug!(?filters, page, per_page, "list_listings called");
         if filters.status.is_none() {
             filters.status = Some("active".to_string());
         }
-        self.listing_repo.find_all(filters, page, per_page).await
+        let result = self.listing_repo.find_all(filters, page, per_page).await;
+        if let Ok(ref r) = result {
+            debug!(
+                total = r.total,
+                returned = r.items.len(),
+                "list_listings result"
+            );
+        }
+        result
     }
 
+    #[instrument(skip(self), fields(seller_id = %seller_id, page, per_page))]
     pub async fn list_my_listings(
         &self,
         seller_id: Uuid,
         page: i64,
         per_page: i64,
     ) -> AppResult<PaginatedResult<Listing>> {
-        self.listing_repo
+        let result = self
+            .listing_repo
             .find_by_seller(seller_id, page, per_page)
-            .await
+            .await;
+        if let Ok(ref r) = result {
+            debug!(total = r.total, "seller listings fetched");
+        }
+        result
     }
 
+    #[instrument(skip(self, req), fields(listing_id = %id, seller_id = %seller_id))]
     pub async fn update_listing(
         &self,
         id: Uuid,
@@ -95,6 +125,7 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
     ) -> AppResult<Listing> {
         let listing = self.get_listing(id).await?;
         if listing.seller_id != seller_id {
+            warn!(listing_id = %id, owner = %listing.seller_id, caller = %seller_id, "update_listing forbidden: not owner");
             return Err(AppError::Forbidden(
                 "You do not own this listing".to_string(),
             ));
@@ -102,6 +133,7 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
 
         if let Some(category_id) = req.category_id {
             if self.category_repo.find_by_id(category_id).await?.is_none() {
+                warn!(category_id = %category_id, "update_listing rejected: category not found");
                 return Err(AppError::BadRequest("Category not found".to_string()));
             }
         }
@@ -116,27 +148,40 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
             quantity: req.quantity,
         };
 
-        self.listing_repo.update(id, data).await
+        let result = self.listing_repo.update(id, data).await;
+        if result.is_ok() {
+            info!(listing_id = %id, "listing updated");
+        }
+        result
     }
 
+    #[instrument(skip(self), fields(listing_id = %id, seller_id = %seller_id))]
     pub async fn delete_listing(&self, id: Uuid, seller_id: Uuid) -> AppResult<()> {
         let listing = self.get_listing(id).await?;
         if listing.seller_id != seller_id {
+            warn!(listing_id = %id, owner = %listing.seller_id, caller = %seller_id, "delete_listing forbidden: not owner");
             return Err(AppError::Forbidden(
                 "You do not own this listing".to_string(),
             ));
         }
-        self.listing_repo.delete(id).await
+        let result = self.listing_repo.delete(id).await;
+        if result.is_ok() {
+            info!(listing_id = %id, "listing deleted");
+        }
+        result
     }
 
+    #[instrument(skip(self), fields(listing_id = %id, seller_id = %seller_id))]
     pub async fn publish_listing(&self, id: Uuid, seller_id: Uuid) -> AppResult<Listing> {
         let listing = self.get_listing(id).await?;
         if listing.seller_id != seller_id {
+            warn!(listing_id = %id, owner = %listing.seller_id, caller = %seller_id, "publish_listing forbidden: not owner");
             return Err(AppError::Forbidden(
                 "You do not own this listing".to_string(),
             ));
         }
-        self.listing_repo
+        let result = self
+            .listing_repo
             .update(
                 id,
                 UpdateListing {
@@ -144,17 +189,24 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
                     ..Default::default()
                 },
             )
-            .await
+            .await;
+        if result.is_ok() {
+            info!(listing_id = %id, "listing published");
+        }
+        result
     }
 
+    #[instrument(skip(self), fields(listing_id = %id, seller_id = %seller_id))]
     pub async fn pause_listing(&self, id: Uuid, seller_id: Uuid) -> AppResult<Listing> {
         let listing = self.get_listing(id).await?;
         if listing.seller_id != seller_id {
+            warn!(listing_id = %id, owner = %listing.seller_id, caller = %seller_id, "pause_listing forbidden: not owner");
             return Err(AppError::Forbidden(
                 "You do not own this listing".to_string(),
             ));
         }
-        self.listing_repo
+        let result = self
+            .listing_repo
             .update(
                 id,
                 UpdateListing {
@@ -162,7 +214,11 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
                     ..Default::default()
                 },
             )
-            .await
+            .await;
+        if result.is_ok() {
+            info!(listing_id = %id, "listing paused");
+        }
+        result
     }
 }
 
@@ -176,10 +232,12 @@ impl<C: CategoryRepository> CategoryService<C> {
         Self { category_repo }
     }
 
+    #[instrument(skip(self))]
     pub async fn list_categories(&self) -> AppResult<Vec<Category>> {
         self.category_repo.find_all().await
     }
 
+    #[instrument(skip(self), fields(kind))]
     pub async fn list_categories_by_kind(&self, kind: &str) -> AppResult<Vec<Category>> {
         self.category_repo.find_by_kind(kind).await
     }
