@@ -1,8 +1,10 @@
 use chrono::{Duration, Utc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::auth::models::Tokens;
 use crate::auth::ports::AuthProvider;
+use crate::rbac::service::RbacService;
 use crate::session::models::NewSession;
 use crate::session::ports::SessionRepository;
 use crate::shared::errors::{AppError, AppResult};
@@ -16,15 +18,23 @@ pub struct AuthService<A: AuthProvider, R: UserRepository, S: SessionRepository>
     user_service: UserService<R>,
     session_repo: S,
     refresh_token_expiry_days: i64,
+    rbac_service: Arc<RbacService>,
 }
 
 impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R, S> {
-    pub fn new(auth_provider: A, user_repo: R, session_repo: S, refresh_token_expiry_days: i64) -> Self {
+    pub fn new(
+        auth_provider: A,
+        user_repo: R,
+        session_repo: S,
+        refresh_token_expiry_days: i64,
+        rbac_service: Arc<RbacService>,
+    ) -> Self {
         Self {
             auth_provider,
             user_service: UserService::new(user_repo),
             session_repo,
             refresh_token_expiry_days,
+            rbac_service,
         }
     }
 
@@ -55,6 +65,7 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
         };
 
         let user = self.user_service.create(new_user).await?;
+        self.rbac_service.assign_default_role(user.id).await?;
         Ok((user, tokens))
     }
 
