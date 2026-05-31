@@ -88,14 +88,22 @@ impl AuthProvider for LocalAuthProvider {
         Ok((user_info, tokens))
     }
 
-    async fn login(&self, email: &str, password: &str, password_hash: &str, role: &str) -> AppResult<(Tokens, UserInfo)> {
+    async fn login(
+        &self,
+        email: &str,
+        password: &str,
+        password_hash: &str,
+        role: &str,
+    ) -> AppResult<(Tokens, UserInfo)> {
         let valid = bcrypt::verify(password, password_hash).map_err(|e| {
             tracing::error!("Password verification error: {:?}", e);
             AppError::Internal
         })?;
 
         if !valid {
-            return Err(AppError::BadRequest("Invalid email or password".to_string()));
+            return Err(AppError::BadRequest(
+                "Invalid email or password".to_string(),
+            ));
         }
 
         let access_token = self.generate_access_token(email, email, role)?;
@@ -146,7 +154,12 @@ impl AuthProvider for LocalAuthProvider {
         Err(AppError::NotImplemented)
     }
 
-    async fn generate_access_token(&self, user_id: &str, email: &str, role: &str) -> AppResult<String> {
+    async fn generate_access_token(
+        &self,
+        user_id: &str,
+        email: &str,
+        role: &str,
+    ) -> AppResult<String> {
         self.generate_access_token(user_id, email, role)
     }
 

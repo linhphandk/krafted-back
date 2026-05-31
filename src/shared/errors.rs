@@ -30,10 +30,9 @@ impl IntoResponse for AppError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal error".to_string(),
             ),
-            AppError::NotImplemented => (
-                StatusCode::NOT_IMPLEMENTED,
-                "Not implemented".to_string(),
-            ),
+            AppError::NotImplemented => {
+                (StatusCode::NOT_IMPLEMENTED, "Not implemented".to_string())
+            }
         };
 
         let body = ErrorResponse { message };

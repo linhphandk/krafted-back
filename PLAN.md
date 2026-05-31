@@ -12,40 +12,48 @@
 ```
 src/
   auth/
-    mod.rs               # Re-exports
+    mod.rs               # Re-exports + auth_router()
     controller.rs        # Axum handlers, routes, DTOs
     service.rs           # Auth business logic
     ports.rs             # AuthProvider trait
-    repository.rs        # LocalAuthProvider adapter
-    models.rs            # Auth domain models (Token, Session)
+    provider.rs          # LocalAuthProvider adapter
+    models.rs            # Auth domain models (Tokens, UserInfo)
   user/
     mod.rs
-    controller.rs
-    service.rs
+    models.rs            # User, NewUser, UpdateUser
     ports.rs             # UserRepository trait
     repository.rs        # DieselUserRepository adapter
-    models.rs            # User domain model
+    service.rs           # UserService
   rbac/
     mod.rs
-    controller.rs
-    service.rs
+    models.rs            # Role, Permission, UserRole, RolePermission
     ports.rs             # RbacRepository trait
     repository.rs        # DieselRbacRepository adapter
-    models.rs            # Role, Permission domain models
+    service.rs           # RbacService
   session/
     mod.rs
-    service.rs
+    models.rs            # Session, NewSession
     ports.rs             # SessionRepository trait
     repository.rs        # DieselSessionRepository adapter
-    models.rs            # Session domain model
+  listing/
+    mod.rs
+    models.rs            # Listing, Category, DTOs, Pagination
+    ports.rs             # ListingRepository, CategoryRepository traits
+    repository.rs        # DieselListingRepository, DieselCategoryRepository adapters
+    service.rs           # ListingService, CategoryService
+    controller.rs        # Axum handlers for listing/category endpoints
   shared/
-    errors.rs            # Shared error types
-    types.rs             # Shared type aliases, newtypes
-    config.rs            # App config (Env, JWT, DB)
-    middleware.rs         # Auth guard, RBAC guard
+    errors.rs            # AppError, AppResult, ErrorResponse
+    types.rs             # DbResult, AuthenticatedUser, PaginatedResponse
+    config.rs            # Config struct (env-based)
+    db.rs                 # establish_pool, run_migrations
+    middleware.rs         # auth_middleware, admin_middleware
   main.rs
   lib.rs
   router.rs              # Compose all domain routers
+  state.rs               # AppState (wiring)
+  schema.rs              # Diesel-generated schema
+  api_doc.rs             # utoipa OpenAPI spec
 migrations/              # Diesel migrations
 ```
 
@@ -73,103 +81,23 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 
 ## Milestones
 
-### M1 — Project Scaffolding & Core Architecture
-- [ ] Initialize Rust/Axum project with Cargo workspace
-- [ ] Set up Diesel with migrations and PostgreSQL config
-- [ ] Create domain-scoped folder structure (auth/, user/, rbac/, session/, shared/)
-- [ ] Wire up Axum with modular router composition
-- [ ] Add CORS, tracing, and env config
+- [x] [M1 — Project Scaffolding & Core Architecture](plan/M1_PROJECT_SCAFFOLDING_CORE_ARCHITECTURE.md)
+- [x] [M2 — Database & Repository Layer](plan/M2_DATABASE_REPOSITORY_LAYER.md)
+- [x] [M3 — Local Auth Implementation](plan/M3_LOCAL_AUTH_IMPLEMENTATION.md)
+- [x] [M4 — Service Layer (Business Logic)](plan/M4_SERVICE_LAYER_BUSINESS_LOGIC.md)
+- [x] [M5 — Controller Layer (Auth HTTP API)](plan/M5_CONTROLLER_LAYER_HTTP_API.md)
+- [ ] [M6 — User Management API](plan/M6_USER_MANAGEMENT_API.md)
+- [x] [M7 — Authorization Logic (RBAC)](plan/M7_AUTHORIZATION_LOGIC_RBAC.md)
+- [ ] [M7.1 — Admin Seed & RBAC Endpoints](plan/M7.1_ADMIN_SEED_RBAC_ENDPOINTS.md)
+- [ ] [M8 — Testing & Documentation](plan/M8_TESTING_DOCUMENTATION.md)
 
-### M2 — Database & Repository Layer
-- [ ] Create Diesel migrations for: `users`, `roles`, `permissions`, `sessions`, `user_roles`, `role_permissions`
-- [ ] Define domain models: `User`, `Role`, `Permission`, `Session`
-- [ ] Define port traits per domain:
-  - `auth/ports.rs` — `AuthProvider` trait
-  - `user/ports.rs` — `UserRepository` trait
-  - `session/ports.rs` — `SessionRepository` trait
-  - `rbac/ports.rs` — `RbacRepository` trait
-- [ ] Implement adapters per domain:
-  - `auth/repository.rs` — `LocalAuthProvider`
-  - `user/repository.rs` — `DieselUserRepository`
-  - `session/repository.rs` — `DieselSessionRepository`
-  - `rbac/repository.rs` — `DieselRbacRepository`
-- [ ] Add integration tests for repositories
+## Marketplace Features
 
-### M3 — Local Auth Implementation
-- [ ] Define port trait: `AuthProvider` — `register()`, `login()`, `introspect_token()`, `refresh_token()`, `revoke_token()`
-- [ ] Implement `LocalAuthProvider` adapter (`src/auth/repository.rs`):
-  - **`register()`**: Hash password with `bcrypt`, call `UserRepository.create()`, return `UserInfo`
-  - **`login()`**: Find user by email, verify password with `bcrypt`, generate JWT access token + refresh token (UUID), save refresh token to `sessions` table, return `(Tokens, UserInfo)`
-  - **`introspect_token()`**: Decode and verify JWT signature using local secret, check `exp`, return `UserInfo`
-  - **`refresh_token()`**: Find refresh token in `sessions` table, verify not expired, rotate token, issue new access token
-  - **`revoke_token()`**: Delete refresh token from `sessions` table
-- [ ] Add JWT config (`JWT_SECRET`, `JWT_EXPIRY_MINUTES`)
-- [ ] Update `AppState` to inject `LocalAuthProvider`
-
-### M4 — Service Layer (Business Logic)
-- [ ] Implement `AuthService`:
-  - `register()` — hash password in DB (done)
-  - `login()` — delegate to `AuthProvider`, create session
-  - `logout()` — revoke session
-  - `refresh_token()` — handle token rotation
-- [ ] Implement `UserService`:
-  - `get_user()`, `update_user()`, `delete_user()`
-- [ ] Implement `RBACService`:
-  - `assign_role()`, `revoke_role()`
-  - `check_permission()`, `has_role()`
-- [ ] All services depend on port interfaces, never concrete adapters
-
-### M5 — Controller Layer (HTTP API)
-- [ ] Auth endpoints:
-  - `POST /api/auth/register` — register user (done)
-  - `POST /api/auth/login` — authenticate, return JWT + refresh cookie
-  - `POST /api/auth/logout` — revoke refresh token
-  - `POST /api/auth/refresh` — rotate refresh token, return new JWT
-  - `GET  /api/auth/me` — current user info (protected)
-- [ ] User management:
-  - `GET    /api/users` — list users (admin)
-  - `GET    /api/users/:id` — get user
-  - `PATCH  /api/users/:id` — update user
-  - `DELETE /api/users/:id` — delete user
-- [ ] RBAC endpoints:
-  - `GET    /api/roles` — list roles
-  - `POST   /api/roles` — create role (admin)
-  - `POST   /api/users/:id/roles` — assign role
-  - `DELETE /api/users/:id/roles/:role` — revoke role
-- [ ] Middleware: auth guard (verify JWT), RBAC guard (check permissions)
-- [ ] Error handling: map domain errors to proper HTTP responses
-
-### M7 — Authorization Logic (RBAC)
-- [ ] Create migration: `roles`, `permissions`, `user_roles`, `role_permissions` tables with FK constraints
-- [ ] Seed data: `user` role, `admin` role, `users:read` + `users:write` permissions
-- [ ] Seed `role_permissions`: `user` role gets `users:read` + `users:write`; `admin` role gets all
-- [ ] RBAC models: `Role`, `Permission`, `UserRole`, `RolePermission`
-- [ ] `RbacRepository` trait: `find_role_by_name()`, `assign_role()`, `get_user_role_ids()`, `get_permission_names_by_role_ids()`
-- [ ] `DieselRbacRepository` adapter (2-query strategy, no JOINs — subquery for permissions)
-- [ ] `RbacService`: `assign_default_role()`, `get_user_permissions()`
-- [ ] On register: assign `user` role via `RbacService.assign_default_role()`
-- [ ] On login/refresh: load role + permissions via `get_user_permissions()`, embed in JWT claims
-- [ ] Update `AuthProvider.generate_access_token()` to accept role + permissions
-- [ ] Update `LocalAuthProvider` to include `role` and `permissions` in JWT claims
-- [ ] Update `AuthenticatedUser` to include `role: String` and `permissions: Vec<String>`
-- [ ] Update auth middleware to extract role + permissions from JWT
-- [ ] Tests: register → role assigned, login → JWT has correct claims
-- [ ] No RBAC endpoints yet (no GET/POST for roles or permissions)
-- [ ] No admin seed user yet
-
-### M7.1 — Admin Seed & RBAC Endpoints (Future)
-- [ ] Seed admin user on startup (env-var configured email/password)
-- [ ] `POST /api/users/:id/roles` — assign role (admin-only)
-- [ ] `DELETE /api/users/:id/roles/:role` — revoke role (admin-only)
-- [ ] Admin-only middleware guard
-- [ ] Permission enforcement in handlers
-
-### M8 — Testing & Documentation
-- [ ] Unit tests: service layer (mock repositories via ports)
-- [ ] Integration tests: repository layer with test DB
-- [ ] API docs (OpenAPI/Swagger via utoipa)
-- [ ] Architecture decision records for key choices
-- [ ] Runnable Docker Compose (Postgres + backend)
+- [ ] [M9 — Listing Domain: Migrations + Models + Schema](plan/M9_LISTINGS_MIGRATIONS_MODELS.md)
+- [ ] [M10 — Listing Domain: Ports + Repositories](plan/M10_LISTINGS_PORTS_REPOSITORIES.md)
+- [ ] [M11 — Listing Domain: Service Layer](plan/M11_LISTINGS_SERVICE.md)
+- [ ] [M12 — Listing Domain: Controller Layer (HTTP API)](plan/M12_LISTINGS_CONTROLLERS.md)
+- [ ] [M13 — Auth Middleware (JWT Extractor + Ownership Checks)](plan/M13_AUTH_MIDDLEWARE.md)
 
 ---
 
@@ -184,76 +112,137 @@ Each domain module is self-contained. Services depend on port traits; adapters i
 | Repository pattern | Diesel with traits | Type-safe, testable |
 | Config | dotenv + envy | Typed, validated config |
 | RBAC query strategy | 2 queries (subquery, no JOINs) | Simplicity over performance |
-| RBAC token strategy | Role + permissions in JWT | No DB lookup per request, refresh on login/refresh |
-| RBAC endpoints | Deferred to M7.1 | No role CRUD endpoints needed yet |
+| RBAC token strategy | Role in JWT, permissions from DB | Small tokens, fresh permissions |
+| RBAC endpoints | M7.1 | Deferred to separate milestone |
 | Default role on register | Always `user` | Simplest, no admin check at registration |
+| User management | Soft delete | `is_active = false`, not row removal |
+| API documentation | utoipa + Scalar | Auto-generated from code, interactive UI |
 
 ## Port Interfaces (Trait Definitions)
 
 ```rust
 // src/auth/ports.rs
 pub trait AuthProvider: Send + Sync {
-    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<UserInfo>;
-    async fn login(&self, email: &str, password: &str) -> AppResult<(Tokens, UserInfo)>;
+    async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
+    async fn login(&self, email: &str, password: &str, password_hash: &str, role: &str) -> AppResult<(Tokens, UserInfo)>;
     async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
     async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
     async fn revoke_token(&self, token: &str) -> AppResult<()>;
+    async fn generate_access_token(&self, user_id: &str, email: &str, role: &str) -> AppResult<String>;
+    fn token_expiry_seconds(&self) -> u64;
 }
 
 // src/user/ports.rs
 pub trait UserRepository: Send + Sync {
-    async fn find_by_id(&self, id: Uuid) -> Result<Option<User>>;
-    async fn find_by_email(&self, email: &str) -> Result<Option<User>>;
-    async fn create(&self, user: NewUser) -> Result<User>;
-    async fn update(&self, id: Uuid, data: UpdateUser) -> Result<User>;
-    async fn delete(&self, id: Uuid) -> Result<()>;
+    async fn create(&self, user: NewUser) -> AppResult<User>;
+    async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
+    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>>;
+    async fn list(&self, page: i64, per_page: i64) -> AppResult<Vec<User>>;
+    async fn count(&self) -> AppResult<i64>;
+    async fn update(&self, id: Uuid, data: UpdateUser) -> AppResult<User>;
+    async fn soft_delete(&self, id: Uuid) -> AppResult<()>;
 }
 
 // src/session/ports.rs
 pub trait SessionRepository: Send + Sync {
-    async fn create(&self, session: NewSession) -> Result<Session>;
-    async fn find_by_token(&self, token: &str) -> Result<Option<Session>>;
-    async fn revoke(&self, token: &str) -> Result<()>;
+    async fn create(&self, session: NewSession) -> AppResult<Session>;
+    async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>>;
+    async fn revoke(&self, token: &str) -> AppResult<()>;
 }
 
 // src/rbac/ports.rs
 pub trait RbacRepository: Send + Sync {
-    async fn find_role_by_name(&self, name: &str) -> Result<Option<Role>>;
-    async fn assign_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()>;
-    async fn get_user_role_ids(&self, user_id: Uuid) -> Result<Vec<Uuid>>;
-    async fn get_permission_names_by_role_ids(&self, role_ids: &[Uuid]) -> Result<Vec<String>>;
+    async fn find_role_by_name(&self, name: &str) -> AppResult<Option<Role>>;
+    async fn find_role_by_id(&self, id: Uuid) -> AppResult<Option<Role>>;
+    async fn assign_role(&self, user_id: Uuid, role_id: Uuid) -> AppResult<()>;
+    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> AppResult<()>;
+    async fn get_user_role_ids(&self, user_id: Uuid) -> AppResult<Vec<Uuid>>;
+    async fn get_permission_names_by_role_ids(&self, role_ids: &[Uuid]) -> AppResult<Vec<String>>;
+    async fn list_roles(&self) -> AppResult<Vec<Role>>;
 }
-// 2-query strategy: get_user_role_ids() → get_permission_names_by_role_ids()
-// No JOINs — subquery in permissions lookup
 ```
 
 ## Adapters (Implementations)
 
 | Port | Adapter | Location | Technology |
 |---|---|---|---|
-| `AuthProvider` | `LocalAuthProvider` | `src/auth/repository.rs` | bcrypt + jsonwebtoken |
+| `AuthProvider` | `LocalAuthProvider` | `src/auth/provider.rs` | bcrypt + jsonwebtoken |
 | `UserRepository` | `DieselUserRepository` | `src/user/repository.rs` | Diesel + PostgreSQL |
 | `SessionRepository` | `DieselSessionRepository` | `src/session/repository.rs` | Diesel + PostgreSQL |
 | `RbacRepository` | `DieselRbacRepository` | `src/rbac/repository.rs` | Diesel + PostgreSQL |
 
-## Dependency Graph
+## Marketplace Data Model
+
+### categories
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | gen_random_uuid() |
+| name | VARCHAR(100) NOT NULL | |
+| slug | VARCHAR(100) NOT NULL UNIQUE | |
+| kind | VARCHAR(20) NOT NULL | 'craft' or 'supply' |
+| created_at | TIMESTAMP DEFAULT NOW() | |
+
+### listings
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | gen_random_uuid() |
+| seller_id | UUID NOT NULL → users.id | ON DELETE CASCADE |
+| title | VARCHAR(255) NOT NULL | |
+| description | TEXT NOT NULL DEFAULT '' | |
+| price_cents | INTEGER NOT NULL | Price in cents |
+| category_id | UUID NOT NULL → categories.id | |
+| status | VARCHAR(20) NOT NULL DEFAULT 'draft' | draft/active/paused/closed |
+| condition | VARCHAR(20) NOT NULL DEFAULT 'handmade' | handmade/new/vintage/refurbished |
+| quantity | INTEGER NOT NULL DEFAULT 1 | |
+| created_at | TIMESTAMP DEFAULT NOW() | |
+| updated_at | TIMESTAMP DEFAULT NOW() | |
+
+## Marketplace Port Interfaces
+
+```rust
+// src/listing/ports.rs
+pub trait CategoryRepository: Send + Sync {
+    async fn find_all(&self) -> AppResult<Vec<Category>>;
+    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<Category>>;
+    async fn find_by_kind(&self, kind: &str) -> AppResult<Vec<Category>>;
+}
+
+pub trait ListingRepository: Send + Sync {
+    async fn create(&self, listing: NewListing) -> AppResult<Listing>;
+    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<Listing>>;
+    async fn find_all(&self, filters: ListingFilters, page: i64, per_page: i64) -> AppResult<PaginatedResult<Listing>>;
+    async fn find_by_seller(&self, seller_id: Uuid, page: i64, per_page: i64) -> AppResult<PaginatedResult<Listing>>;
+    async fn update(&self, id: Uuid, data: UpdateListing) -> AppResult<Listing>;
+    async fn delete(&self, id: Uuid) -> AppResult<()>;
+    async fn count_by_seller(&self, seller_id: Uuid) -> AppResult<i64>;
+}
+```
+
+## Dependency Graph (with Marketplace)
 
 ```
-src/auth/controller.rs
-         ↓
-src/auth/service.rs
-         ↓  (depends on traits)
-         ├─ src/auth/ports.rs  ←  src/auth/repository.rs (adapter impl)
-         ├─ src/user/ports.rs  ←  src/user/repository.rs (adapter impl)
-         └─ src/rbac/ports.rs  ←  src/rbac/repository.rs (adapter impl)
+krafted-back:
+  M1–M5 (done) → M7 (done) → M6 → M7.1 → M8
+                               ↘
+                                  M9 → M10 → M11 → M12 → M13
 
-src/user/controller.rs
-         ↓
-src/user/service.rs
-         ↓  (depends on traits)
-src/user/ports.rs  ←  src/user/repository.rs (adapter impl)
+krafted-front:
+  M1 (done) → M2 (done) → M3 (partial)
+                            ↓
+                            M4 → M5 → M6 → M7 (marketplace features)
+                                             ↑
+                                             requires lightweight RequireAuth (from M8)
 
-src/rbac/service.rs
-         ↓  (depends on traits)
-src/rbac/ports.rs  ←  src/rbac/repository.rs (adapter impl)
+                            M8 → M9 → M10 → M11 (auth template completion, deferred)
 ```
+
+## Refresh Token Strategy (Source: Auth0)
+
+- **Access tokens**: short-lived (minutes/hours), bearer tokens for API access
+- **Refresh tokens**: longer-lived, used to obtain new access tokens without re-login
+- **Refresh Token Rotation**: every refresh token exchange returns a NEW refresh token; old one is invalidated
+- **Automatic Reuse Detection**: if a previously-used refresh token is sent again, invalidate the entire "token family" and require re-authentication
+- **Token families**: track all refresh tokens descending from the original; reuse of any member invalidates all
+- **Security**: treat all token holders as potentially malicious; rotation + reuse detection mitigates replay attacks
+- **Implementation**: store refresh tokens in DB, rotate on every use, detect reuse, invalidate family on conflict
+- **Token Delivery**: Return `{ access_token, refresh_token, expires_in }` in JSON response body. No cookies.

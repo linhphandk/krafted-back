@@ -19,7 +19,10 @@ pub async fn auth_middleware(
     let token = match auth_header {
         Some(h) if h.starts_with("Bearer ") => &h[7..],
         _ => {
-            return (StatusCode::UNAUTHORIZED, "Missing or invalid Authorization header")
+            return (
+                StatusCode::UNAUTHORIZED,
+                "Missing or invalid Authorization header",
+            )
                 .into_response();
         }
     };

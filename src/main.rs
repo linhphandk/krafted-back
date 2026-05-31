@@ -1,10 +1,10 @@
+use http::Method;
 use krafted_back::router::create_router;
 use krafted_back::shared::config::Config;
 use krafted_back::shared::db::{establish_pool, run_migrations};
 use krafted_back::state::AppState;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
-use http::Method;
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +27,14 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers(Any);
 
     let app = app.layer(cors);

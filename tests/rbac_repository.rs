@@ -7,7 +7,13 @@ use krafted_back::user::repository::DieselUserRepository;
 use testcontainers::clients::Cli;
 use testcontainers_modules::postgres::Postgres;
 
-fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, DieselRbacRepository, DieselUserRepository) {
+fn setup(
+    docker: &Cli,
+) -> (
+    testcontainers::Container<'_, Postgres>,
+    DieselRbacRepository,
+    DieselUserRepository,
+) {
     let container = docker.run(Postgres::default());
     let port = container.get_host_port_ipv4(5432);
     let db_url = format!("postgres://postgres:postgres@localhost:{}/postgres", port);

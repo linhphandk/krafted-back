@@ -7,23 +7,14 @@ use testcontainers::clients::Cli;
 use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
 
-fn setup(
-    docker: &Cli,
-) -> (
-    testcontainers::Container<'_, Postgres>,
-    axum::Router,
-) {
+fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::Router) {
     let container = docker.run(Postgres::default());
     let port = container.get_host_port_ipv4(5432);
     let db_url = format!("postgres://postgres:postgres@localhost:{}/postgres", port);
     let pool = establish_pool(&db_url, 4);
     run_migrations(&pool);
 
-    let state = AppState::new(
-        pool,
-        "test-secret".to_string(),
-        15,
-    );
+    let state = AppState::new(pool, "test-secret".to_string(), 15);
     let app = create_router(state);
     (container, app)
 }

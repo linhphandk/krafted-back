@@ -116,10 +116,7 @@ pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> AppResult<(StatusCode, Json<LoginResponse>)> {
-    let (user, tokens) = state
-        .auth_service
-        .login(req.email, req.password)
-        .await?;
+    let (user, tokens) = state.auth_service.login(req.email, req.password).await?;
     let response = LoginResponse {
         user: UserResponse {
             id: user.id.to_string(),

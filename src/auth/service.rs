@@ -56,7 +56,10 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
             ));
         }
 
-        let (user_info, tokens) = self.auth_provider.register(&email, &name, &password).await?;
+        let (user_info, tokens) = self
+            .auth_provider
+            .register(&email, &name, &password)
+            .await?;
 
         let new_user = NewUser {
             email,
@@ -71,7 +74,9 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
 
     pub async fn login(&self, email: String, password: String) -> AppResult<(User, Tokens)> {
         let user = self.user_service.find_by_email(&email).await?;
-        let user = user.ok_or(AppError::BadRequest("Invalid email or password".to_string()))?;
+        let user = user.ok_or(AppError::BadRequest(
+            "Invalid email or password".to_string(),
+        ))?;
 
         let (role, _permissions) = self.rbac_service.get_user_permissions(user.id).await?;
 

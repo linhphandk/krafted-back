@@ -117,9 +117,7 @@ fn fake_rbac_service() -> Arc<RbacService> {
                 created_at: chrono::Utc::now().naive_utc(),
             }))
         });
-    mock_repo
-        .expect_assign_role()
-        .returning(|_, _| Ok(()));
+    mock_repo.expect_assign_role().returning(|_, _| Ok(()));
     mock_repo
         .expect_get_user_role_ids()
         .returning(|_| Ok(vec![Uuid::new_v4()]));
@@ -157,7 +155,13 @@ async fn test_register_success() {
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo.expect_create().returning(|_| Ok(fake_user()));
 
-    let service = AuthService::new(mock_auth, mock_repo, MockMockSessionRepo::new(), 7, fake_rbac_service());
+    let service = AuthService::new(
+        mock_auth,
+        mock_repo,
+        MockMockSessionRepo::new(),
+        7,
+        fake_rbac_service(),
+    );
     let result = service
         .register(
             "test@example.com".to_string(),
@@ -172,7 +176,11 @@ async fn test_register_success() {
 async fn test_register_empty_email() {
     let service = new_service();
     let result = service
-        .register("".to_string(), "Test".to_string(), "password123".to_string())
+        .register(
+            "".to_string(),
+            "Test".to_string(),
+            "password123".to_string(),
+        )
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
@@ -181,7 +189,11 @@ async fn test_register_empty_email() {
 async fn test_register_empty_name() {
     let service = new_service();
     let result = service
-        .register("test@example.com".to_string(), "".to_string(), "password123".to_string())
+        .register(
+            "test@example.com".to_string(),
+            "".to_string(),
+            "password123".to_string(),
+        )
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
@@ -190,7 +202,11 @@ async fn test_register_empty_name() {
 async fn test_register_short_password() {
     let service = new_service();
     let result = service
-        .register("test@example.com".to_string(), "Test".to_string(), "short".to_string())
+        .register(
+            "test@example.com".to_string(),
+            "Test".to_string(),
+            "short".to_string(),
+        )
         .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
@@ -208,7 +224,9 @@ async fn test_login_success() {
         .returning(|_| Ok(Some(fake_user())));
 
     let mut mock_session = MockMockSessionRepo::new();
-    mock_session.expect_create().returning(|_| Ok(fake_session()));
+    mock_session
+        .expect_create()
+        .returning(|_| Ok(fake_session()));
 
     let service = AuthService::new(mock_auth, mock_repo, mock_session, 7, fake_rbac_service());
     let result = service
@@ -260,9 +278,7 @@ async fn test_refresh_token_success() {
     mock_auth
         .expect_generate_access_token()
         .returning(|_, _, _| Ok("new-jwt".to_string()));
-    mock_auth
-        .expect_token_expiry_seconds()
-        .returning(|| 900);
+    mock_auth.expect_token_expiry_seconds().returning(|| 900);
 
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo
@@ -270,18 +286,18 @@ async fn test_refresh_token_success() {
         .returning(|_| Ok(Some(fake_user())));
 
     let mut mock_session = MockMockSessionRepo::new();
-    mock_session
-        .expect_find_by_token()
-        .returning(|_| {
-            let mut s = fake_session();
-            s.expires_at = chrono::Utc::now()
-                .checked_add_signed(chrono::Duration::days(7))
-                .unwrap()
-                .naive_utc();
-            Ok(Some(s))
-        });
+    mock_session.expect_find_by_token().returning(|_| {
+        let mut s = fake_session();
+        s.expires_at = chrono::Utc::now()
+            .checked_add_signed(chrono::Duration::days(7))
+            .unwrap()
+            .naive_utc();
+        Ok(Some(s))
+    });
     mock_session.expect_revoke().returning(|_| Ok(())).times(1);
-    mock_session.expect_create().returning(|_| Ok(fake_session()));
+    mock_session
+        .expect_create()
+        .returning(|_| Ok(fake_session()));
 
     let service = AuthService::new(mock_auth, mock_repo, mock_session, 7, fake_rbac_service());
     let result = service.refresh_token("old-refresh".to_string()).await;

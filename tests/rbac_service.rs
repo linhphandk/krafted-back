@@ -37,9 +37,7 @@ async fn test_assign_default_role_success() {
         .with(mockall::predicate::eq("user"))
         .returning(|_| Ok(Some(fake_role())));
 
-    mock_repo
-        .expect_assign_role()
-        .returning(|_, _| Ok(()));
+    mock_repo.expect_assign_role().returning(|_, _| Ok(()));
 
     let service = RbacService::new(Arc::new(mock_repo));
     let result = service.assign_default_role(Uuid::new_v4()).await;
