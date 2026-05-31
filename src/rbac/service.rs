@@ -19,4 +19,21 @@ impl RbacService {
         let role = role.ok_or(AppError::Internal)?;
         self.repo.assign_role(user_id, role.id).await
     }
+
+    pub async fn get_user_permissions(
+        &self,
+        user_id: Uuid,
+    ) -> AppResult<(String, Vec<String>)> {
+        let role_ids = self.repo.get_user_role_ids(user_id).await?;
+        if role_ids.is_empty() {
+            return Err(AppError::Internal);
+        }
+        let permissions = self.repo.get_permission_names_by_role_ids(&role_ids).await?;
+        let role = self
+            .repo
+            .find_role_by_name("user")
+            .await?
+            .ok_or(AppError::Internal)?;
+        Ok((role.name, permissions))
+    }
 }

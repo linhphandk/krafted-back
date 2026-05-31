@@ -24,7 +24,7 @@ pub async fn auth_middleware(
         }
     };
 
-    let user = match state.auth_service.get_current_user(token.to_string()).await {
+    let (user, role) = match state.auth_service.get_current_user(token.to_string()).await {
         Ok(u) => u,
         Err(_) => {
             return (StatusCode::UNAUTHORIZED, "Invalid or expired token").into_response();
@@ -35,6 +35,7 @@ pub async fn auth_middleware(
         id: user.id,
         email: user.email,
         name: user.name,
+        role,
     });
 
     next.run(request).await

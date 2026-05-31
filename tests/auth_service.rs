@@ -21,11 +21,11 @@ mock! {
     #[async_trait]
     impl AuthProvider for MockAuthProvider {
         async fn register(&self, email: &str, name: &str, password: &str) -> AppResult<(UserInfo, Tokens)>;
-        async fn login(&self, email: &str, password: &str, password_hash: &str) -> AppResult<(Tokens, UserInfo)>;
+        async fn login(&self, email: &str, password: &str, password_hash: &str, role: &str) -> AppResult<(Tokens, UserInfo)>;
         async fn introspect_token(&self, token: &str) -> AppResult<UserInfo>;
         async fn refresh_token(&self, refresh_token: &str) -> AppResult<Tokens>;
         async fn revoke_token(&self, token: &str) -> AppResult<()>;
-        async fn generate_access_token(&self, user_id: &str, email: &str) -> AppResult<String>;
+        async fn generate_access_token(&self, user_id: &str, email: &str, role: &str) -> AppResult<String>;
         fn token_expiry_seconds(&self) -> u64;
     }
 }
@@ -91,6 +91,7 @@ fn fake_user_info() -> UserInfo {
         email: "test@example.com".to_string(),
         name: "Test".to_string(),
         password_hash: "$2b$12$hashed".to_string(),
+        role: "user".to_string(),
     }
 }
 
@@ -119,6 +120,12 @@ fn fake_rbac_service() -> Arc<RbacService> {
     mock_repo
         .expect_assign_role()
         .returning(|_, _| Ok(()));
+    mock_repo
+        .expect_get_user_role_ids()
+        .returning(|_| Ok(vec![Uuid::new_v4()]));
+    mock_repo
+        .expect_get_permission_names_by_role_ids()
+        .returning(|_| Ok(vec![]));
     Arc::new(RbacService::new(Arc::new(mock_repo)))
 }
 
@@ -193,7 +200,7 @@ async fn test_login_success() {
     let mut mock_auth = MockMockAuthProvider::new();
     mock_auth
         .expect_login()
-        .returning(|_, _, _| Ok((fake_tokens(), fake_user_info())));
+        .returning(|_, _, _, _| Ok((fake_tokens(), fake_user_info())));
 
     let mut mock_repo = MockMockUserRepo::new();
     mock_repo
@@ -252,7 +259,7 @@ async fn test_refresh_token_success() {
     let mut mock_auth = MockMockAuthProvider::new();
     mock_auth
         .expect_generate_access_token()
-        .returning(|_, _| Ok("new-jwt".to_string()));
+        .returning(|_, _, _| Ok("new-jwt".to_string()));
     mock_auth
         .expect_token_expiry_seconds()
         .returning(|| 900);
@@ -346,7 +353,7 @@ async fn test_get_current_user_success() {
     );
     let result = service.get_current_user("valid-jwt".to_string()).await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().email, "test@example.com");
+    assert_eq!(result.unwrap().0.email, "test@example.com");
 }
 
 #[tokio::test]

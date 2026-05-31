@@ -17,6 +17,7 @@ pub struct LocalAuthProvider {
 struct Claims {
     sub: String,
     email: String,
+    role: String,
     exp: usize,
 }
 
@@ -28,7 +29,7 @@ impl LocalAuthProvider {
         }
     }
 
-    fn generate_access_token(&self, user_id: &str, email: &str) -> AppResult<String> {
+    fn generate_access_token(&self, user_id: &str, email: &str, role: &str) -> AppResult<String> {
         let exp = Utc::now()
             .checked_add_signed(chrono::Duration::minutes(self.jwt_expiry_minutes as i64))
             .ok_or(AppError::Internal)?
@@ -37,6 +38,7 @@ impl LocalAuthProvider {
         let claims = Claims {
             sub: user_id.to_string(),
             email: email.to_string(),
+            role: role.to_string(),
             exp,
         };
 
@@ -66,13 +68,14 @@ impl AuthProvider for LocalAuthProvider {
         })?;
 
         let user_id = uuid::Uuid::new_v4().to_string();
-        let access_token = self.generate_access_token(&user_id, email)?;
+        let access_token = self.generate_access_token(&user_id, email, "user")?;
 
         let user_info = UserInfo {
             sub: user_id,
             email: email.to_string(),
             name: name.to_string(),
             password_hash,
+            role: "user".to_string(),
         };
 
         let tokens = Tokens {
@@ -85,7 +88,7 @@ impl AuthProvider for LocalAuthProvider {
         Ok((user_info, tokens))
     }
 
-    async fn login(&self, email: &str, password: &str, password_hash: &str) -> AppResult<(Tokens, UserInfo)> {
+    async fn login(&self, email: &str, password: &str, password_hash: &str, role: &str) -> AppResult<(Tokens, UserInfo)> {
         let valid = bcrypt::verify(password, password_hash).map_err(|e| {
             tracing::error!("Password verification error: {:?}", e);
             AppError::Internal
@@ -95,7 +98,7 @@ impl AuthProvider for LocalAuthProvider {
             return Err(AppError::BadRequest("Invalid email or password".to_string()));
         }
 
-        let access_token = self.generate_access_token(email, email)?;
+        let access_token = self.generate_access_token(email, email, role)?;
 
         let tokens = Tokens {
             access_token,
@@ -109,6 +112,7 @@ impl AuthProvider for LocalAuthProvider {
             email: email.to_string(),
             name: String::new(),
             password_hash: password_hash.to_string(),
+            role: role.to_string(),
         };
 
         Ok((tokens, user_info))
@@ -130,6 +134,7 @@ impl AuthProvider for LocalAuthProvider {
             email: token_data.claims.email,
             name: String::new(),
             password_hash: String::new(),
+            role: token_data.claims.role,
         })
     }
 
@@ -141,8 +146,8 @@ impl AuthProvider for LocalAuthProvider {
         Err(AppError::NotImplemented)
     }
 
-    async fn generate_access_token(&self, user_id: &str, email: &str) -> AppResult<String> {
-        self.generate_access_token(user_id, email)
+    async fn generate_access_token(&self, user_id: &str, email: &str, role: &str) -> AppResult<String> {
+        self.generate_access_token(user_id, email, role)
     }
 
     fn token_expiry_seconds(&self) -> u64 {
