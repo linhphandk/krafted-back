@@ -56,19 +56,31 @@ async fn get_category_name(state: &AppState, category_id: Uuid) -> Option<String
         .map(|c| c.name)
 }
 
+async fn get_seller_name(state: &AppState, seller_id: Uuid) -> Option<String> {
+    state
+        .user_service
+        .find_by_id(seller_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|u| u.name)
+}
+
 fn to_listing_response(
     listing: crate::listing::models::Listing,
     category_name: Option<String>,
+    seller_name: Option<String>,
 ) -> ListingResponse {
-    ListingResponse::from_listing(&listing, category_name)
+    ListingResponse::from_listing(&listing, category_name, seller_name)
 }
 
-async fn listing_with_category(
+async fn listing_with_category_and_seller(
     state: &AppState,
     listing: crate::listing::models::Listing,
 ) -> ListingResponse {
     let category_name = get_category_name(state, listing.category_id).await;
-    to_listing_response(listing, category_name)
+    let seller_name = get_seller_name(state, listing.seller_id).await;
+    to_listing_response(listing, category_name, seller_name)
 }
 
 #[utoipa::path(
@@ -118,7 +130,7 @@ pub async fn list_listings(
 
     let mut items = Vec::with_capacity(result.items.len());
     for listing in result.items {
-        items.push(listing_with_category(&state, listing).await);
+        items.push(listing_with_category_and_seller(&state, listing).await);
     }
 
     Ok(Json(PaginatedResponse::from_paginated_result(
@@ -148,7 +160,12 @@ pub async fn get_listing(
     info!("get_listing");
     let listing = state.listing_service.get_listing(id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
-    Ok(Json(to_listing_response(listing, category_name)))
+    let seller_name = get_seller_name(&state, listing.seller_id).await;
+    Ok(Json(to_listing_response(
+        listing,
+        category_name,
+        seller_name,
+    )))
 }
 
 #[utoipa::path(
@@ -172,9 +189,10 @@ pub async fn create_listing(
     info!(seller_id = %seller_id, "create_listing");
     let listing = state.listing_service.create_listing(seller_id, req).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
+    let seller_name = get_seller_name(&state, listing.seller_id).await;
     Ok((
         StatusCode::CREATED,
-        Json(to_listing_response(listing, category_name)),
+        Json(to_listing_response(listing, category_name, seller_name)),
     ))
 }
 
@@ -205,7 +223,12 @@ pub async fn update_listing(
         .update_listing(id, seller_id, req)
         .await?;
     let category_name = get_category_name(&state, listing.category_id).await;
-    Ok(Json(to_listing_response(listing, category_name)))
+    let seller_name = get_seller_name(&state, listing.seller_id).await;
+    Ok(Json(to_listing_response(
+        listing,
+        category_name,
+        seller_name,
+    )))
 }
 
 #[utoipa::path(
@@ -252,7 +275,12 @@ pub async fn publish_listing(
     info!(seller_id = %seller_id, "publish_listing");
     let listing = state.listing_service.publish_listing(id, seller_id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
-    Ok(Json(to_listing_response(listing, category_name)))
+    let seller_name = get_seller_name(&state, listing.seller_id).await;
+    Ok(Json(to_listing_response(
+        listing,
+        category_name,
+        seller_name,
+    )))
 }
 
 #[utoipa::path(
@@ -276,7 +304,12 @@ pub async fn pause_listing(
     info!(seller_id = %seller_id, "pause_listing");
     let listing = state.listing_service.pause_listing(id, seller_id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
-    Ok(Json(to_listing_response(listing, category_name)))
+    let seller_name = get_seller_name(&state, listing.seller_id).await;
+    Ok(Json(to_listing_response(
+        listing,
+        category_name,
+        seller_name,
+    )))
 }
 
 #[utoipa::path(
@@ -307,7 +340,7 @@ pub async fn seller_listings(
 
     let mut items = Vec::with_capacity(result.items.len());
     for listing in result.items {
-        items.push(listing_with_category(&state, listing).await);
+        items.push(listing_with_category_and_seller(&state, listing).await);
     }
 
     Ok(Json(PaginatedResponse::from_paginated_result(

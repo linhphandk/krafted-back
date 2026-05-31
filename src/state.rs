@@ -6,6 +6,7 @@ use crate::rbac::service::RbacService;
 use crate::session::repository::DieselSessionRepository;
 use crate::shared::db::DbPool;
 use crate::user::repository::DieselUserRepository;
+use crate::user::service::UserService;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -17,18 +18,20 @@ pub struct AppState {
     >,
     pub listing_service: ListingService<DieselListingRepository, DieselCategoryRepository>,
     pub category_service: CategoryService<DieselCategoryRepository>,
+    pub user_service: UserService<DieselUserRepository>,
 }
 
 impl AppState {
     pub fn new(pool: DbPool, jwt_secret: String, jwt_expiry_minutes: u64) -> Self {
         let auth_provider = LocalAuthProvider::new(jwt_secret.clone(), jwt_expiry_minutes);
         let user_repo = DieselUserRepository::new(pool.clone());
+        let user_repo_for_auth = user_repo.clone();
         let session_repo = DieselSessionRepository::new(pool.clone());
         let rbac_repo = DieselRbacRepository::new(pool.clone());
         let rbac_service = Arc::new(RbacService::new(Arc::new(rbac_repo)));
         let auth_service = crate::auth::service::AuthService::new(
             auth_provider,
-            user_repo,
+            user_repo_for_auth,
             session_repo,
             7,
             rbac_service,
@@ -38,11 +41,13 @@ impl AppState {
         let listing_repo = DieselListingRepository::new(pool.clone());
         let listing_service = ListingService::new(listing_repo, category_repo.clone());
         let category_service = CategoryService::new(category_repo);
+        let user_service = UserService::new(user_repo);
 
         Self {
             auth_service,
             listing_service,
             category_service,
+            user_service,
         }
     }
 }

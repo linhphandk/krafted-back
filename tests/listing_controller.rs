@@ -283,6 +283,7 @@ async fn test_create_and_get_listing() {
     assert_eq!(created["price_cents"], 1000);
     assert_eq!(created["status"], "draft");
     assert_eq!(created["seller_id"], seller_id.to_string());
+    assert_eq!(created["seller_name"], "Test User");
     let listing_id = created["id"].as_str().unwrap();
 
     let resp = app
@@ -304,6 +305,7 @@ async fn test_create_and_get_listing() {
     let got: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(got["title"], "Handmade Vase");
     assert!(got["category_name"].as_str().unwrap().len() > 0);
+    assert_eq!(got["seller_name"], "Test User");
 }
 
 #[tokio::test]
