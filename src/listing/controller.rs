@@ -56,7 +56,7 @@ async fn get_category_name(state: &AppState, category_id: Uuid) -> Option<String
         .map(|c| c.name)
 }
 
-async fn get_seller_name(state: &AppState, seller_id: Uuid) -> Option<String> {
+async fn get_seller_name(state: &AppState, seller_id: Uuid) -> String {
     state
         .user_service
         .find_by_id(seller_id)
@@ -64,12 +64,13 @@ async fn get_seller_name(state: &AppState, seller_id: Uuid) -> Option<String> {
         .ok()
         .flatten()
         .map(|u| u.name)
+        .unwrap_or_else(|| seller_id.to_string())
 }
 
 fn to_listing_response(
     listing: crate::listing::models::Listing,
     category_name: Option<String>,
-    seller_name: Option<String>,
+    seller_name: String,
 ) -> ListingResponse {
     ListingResponse::from_listing(&listing, category_name, seller_name)
 }
@@ -86,6 +87,15 @@ async fn listing_with_category_and_seller(
 #[utoipa::path(
     get,
     path = "/api/listings",
+    params(
+        ("status" = Option<String>, Query, description = "Filter by status (active, draft, paused)"),
+        ("category_id" = Option<String>, Query, description = "Filter by category UUID"),
+        ("kind" = Option<String>, Query, description = "Filter by kind (craft, supply)"),
+        ("search" = Option<String>, Query, description = "Search in title"),
+        ("sort" = Option<String>, Query, description = "Sort order: newest, price_asc, price_desc"),
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("per_page" = Option<i64>, Query, description = "Items per page"),
+    ),
     responses(
         (status = 200, description = "List of listings", body = PaginatedResponse<ListingResponse>),
     ),
@@ -315,6 +325,10 @@ pub async fn pause_listing(
 #[utoipa::path(
     get,
     path = "/api/listings/mine",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("per_page" = Option<i64>, Query, description = "Items per page"),
+    ),
     responses(
         (status = 200, description = "Seller's listings", body = PaginatedResponse<ListingResponse>),
         (status = 401, description = "Unauthorized"),
@@ -356,6 +370,9 @@ pub async fn seller_listings(
 #[utoipa::path(
     get,
     path = "/api/categories",
+    params(
+        ("kind" = Option<String>, Query, description = "Filter by kind (craft, supply)"),
+    ),
     responses(
         (status = 200, description = "List of categories", body = Vec<crate::listing::models::Category>),
     ),
