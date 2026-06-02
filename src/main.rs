@@ -8,7 +8,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    dotenvy::dotenv().ok(); // Load .env file for local development
     tracing_subscriber::fmt()
         .compact()
         .with_target(false)

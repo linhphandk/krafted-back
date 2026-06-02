@@ -1,7 +1,7 @@
 use tracing::{debug, instrument};
 use uuid::Uuid;
 
-use crate::shared::errors::AppResult;
+use crate::shared::errors::{AppError, AppResult};
 use crate::user::models::{NewUser, User};
 use crate::user::ports::UserRepository;
 
@@ -18,6 +18,14 @@ impl<R: UserRepository> UserService<R> {
     #[instrument(skip(self, new_user), fields(email = %new_user.email))]
     pub async fn create(&self, new_user: NewUser) -> AppResult<User> {
         debug!("create user");
+
+        if new_user.email.is_empty() {
+            return Err(AppError::BadRequest("Email cannot be empty".to_string()));
+        }
+        if new_user.name.is_empty() {
+            return Err(AppError::BadRequest("Name cannot be empty".to_string()));
+        }
+
         self.repo.create(new_user).await
     }
 

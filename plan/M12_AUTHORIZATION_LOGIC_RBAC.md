@@ -1,8 +1,8 @@
-# M7 — Authorization Logic (RBAC)
+# M12 — Authorization Logic (RBAC)
 
 **Deliverable: Roles and permissions are seeded in the database, default `user` role is assigned on registration, JWTs include role and permissions, auth middleware extracts role and permissions from token claims**
 
-**Depends on: M6**
+**Depends on: M11**
 
 ---
 

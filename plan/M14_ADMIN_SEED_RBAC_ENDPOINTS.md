@@ -1,8 +1,8 @@
-# M13 — Admin Seed & RBAC Endpoints
+# M14 — Admin Seed & RBAC Endpoints
 
 **Deliverable: bootstrap admin user on startup, expose RBAC management endpoints**
 
-**Depends on: M12**
+**Depends on: M13**
 
 ---
 

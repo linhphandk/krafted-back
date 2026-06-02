@@ -13,6 +13,8 @@ mock! {
     #[async_trait]
     impl UserRepository for MockUserRepo {
         async fn create(&self, user: NewUser) -> AppResult<User>;
+        async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
+        async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>>;
     }
 }
 
@@ -33,9 +35,12 @@ async fn test_create_user_success() {
     mock_repo.expect_create().returning(|_| Ok(fake_user()));
 
     let service = UserService::new(mock_repo);
-    let result = service
-        .create_user("test@example.com".to_string(), "Test".to_string())
-        .await;
+    let new_user = NewUser {
+        email: "test@example.com".to_string(),
+        name: "Test".to_string(),
+        password_hash: "hash".to_string(),
+    };
+    let result = service.create(new_user).await;
     assert!(result.is_ok());
 }
 
@@ -43,9 +48,12 @@ async fn test_create_user_success() {
 async fn test_create_user_empty_email() {
     let mock_repo = MockMockUserRepo::new();
     let service = UserService::new(mock_repo);
-    let result = service
-        .create_user("".to_string(), "Test".to_string())
-        .await;
+    let new_user = NewUser {
+        email: "".to_string(),
+        name: "Test".to_string(),
+        password_hash: "hash".to_string(),
+    };
+    let result = service.create(new_user).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
 
@@ -53,9 +61,12 @@ async fn test_create_user_empty_email() {
 async fn test_create_user_empty_name() {
     let mock_repo = MockMockUserRepo::new();
     let service = UserService::new(mock_repo);
-    let result = service
-        .create_user("test@example.com".to_string(), "".to_string())
-        .await;
+    let new_user = NewUser {
+        email: "test@example.com".to_string(),
+        name: "".to_string(),
+        password_hash: "hash".to_string(),
+    };
+    let result = service.create(new_user).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }
 
@@ -67,8 +78,11 @@ async fn test_create_user_repo_error() {
         .returning(|_| Err(AppError::BadRequest("Email already exists".to_string())));
 
     let service = UserService::new(mock_repo);
-    let result = service
-        .create_user("dup@example.com".to_string(), "Test".to_string())
-        .await;
+    let new_user = NewUser {
+        email: "dup@example.com".to_string(),
+        name: "Test".to_string(),
+        password_hash: "hash".to_string(),
+    };
+    let result = service.create(new_user).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }

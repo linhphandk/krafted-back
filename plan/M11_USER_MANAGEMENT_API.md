@@ -1,4 +1,4 @@
-# M6 — User Management API
+# M11 — User Management API
 
 **Deliverable: Authenticated users can be listed (paginated), viewed, updated, and soft-deleted via REST API endpoints**
 

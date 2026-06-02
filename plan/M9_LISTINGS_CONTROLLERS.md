@@ -1,8 +1,8 @@
-# M11 — Listing Domain: Controller Layer (HTTP API)
+# M9 — Listing Domain: Controller Layer (HTTP API)
 
 **Deliverable: All listing and category HTTP endpoints, router wired, OpenAPI docs updated**
 
-**Depends on: M10**
+**Depends on: M8**
 
 ---
 

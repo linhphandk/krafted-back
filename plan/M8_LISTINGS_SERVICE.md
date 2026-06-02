@@ -1,8 +1,8 @@
-# M10 — Listing Domain: Service Layer
+# M8 — Listing Domain: Service Layer
 
 **Deliverable: ListingService and CategoryService with business logic, unit tests**
 
-**Depends on: M9**
+**Depends on: M7**
 
 ---
 

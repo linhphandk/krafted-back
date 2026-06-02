@@ -5,7 +5,7 @@ use tracing::info;
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 pub fn establish_pool(database_url: &str, pool_size: u32) -> DbPool {
     let manager = ConnectionManager::<PgConnection>::new(database_url);

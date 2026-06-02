@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    container_name: db
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: krafted
+      POSTGRES_PASSWORD: krafted
+      POSTGRES_DB: krafted
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U krafted -d krafted"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  app:
+    container_name: krafted-back
+    build: .
+    restart: unless-stopped
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=3000
+      - DATABASE_URL=postgres://krafted:krafted@db:5432/krafted
+      - DATABASE_POOL_SIZE=4
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRY_MINUTES=15
+      - RUST_LOG=info
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+
+networks:
+  app-network:
+    driver: bridge
