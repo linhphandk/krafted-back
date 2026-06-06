@@ -21,7 +21,7 @@ services:
 
   app:
     container_name: krafted-back
-    build: .
+    image: ghcr.io/linhphandk/krafted-back:latest
     restart: unless-stopped
     environment:
       - SERVER_HOST=0.0.0.0
@@ -30,6 +30,9 @@ services:
       - DATABASE_POOL_SIZE=4
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRY_MINUTES=15
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_REGION=${S3_REGION}
+      - S3_ENDPOINT=${S3_ENDPOINT}
       - RUST_LOG=info
     depends_on:
       db:
