@@ -2,10 +2,12 @@ use axum::body::Body;
 use axum::http::StatusCode;
 use krafted_back::router::create_router;
 use krafted_back::shared::db::{establish_pool, run_migrations};
+use krafted_back::shared::image_storage::ImageStorage;
 use krafted_back::shared::image_storage::S3ImageStorage;
 use krafted_back::state::AppState;
 use serde_json::json;
 use testcontainers::clients::Cli;
+use testcontainers_modules::minio::MinIO;
 use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -17,7 +19,8 @@ async fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::
     let pool = establish_pool(&db_url, 4);
     run_migrations(&pool);
 
-    let image_storage = S3ImageStorage::new(Some("http://localhost:19000".to_string()), None).await;
+    let image_storage =
+        S3ImageStorage::new(Some("http://localhost:19000".to_string()), None, None).await;
     let state = AppState::new(
         pool,
         "test-secret".to_string(),
@@ -745,4 +748,117 @@ async fn test_sort_by_price() {
     let items = result["items"].as_array().unwrap();
     assert_eq!(items[0]["price_cents"], 3000);
     assert_eq!(items[2]["price_cents"], 500);
+}
+
+#[tokio::test]
+async fn test_upload_images() {
+    let docker = Cli::default();
+
+    let pg_container = docker.run(Postgres::default());
+    let port = pg_container.get_host_port_ipv4(5432);
+    let db_url = format!("postgres://postgres:postgres@localhost:{}/postgres", port);
+    let pool = establish_pool(&db_url, 4);
+    run_migrations(&pool);
+
+    let minio = MinIO::default();
+    let minio_container = docker.run(minio);
+    let minio_port = minio_container.get_host_port_ipv4(9000);
+    let endpoint = format!("http://127.0.0.1:{}", minio_port);
+
+    let creds =
+        aws_sdk_s3::config::Credentials::new("minioadmin", "minioadmin", None, None, "test");
+    let s3_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .endpoint_url(&endpoint)
+        .region("us-east-1")
+        .credentials_provider(creds.clone())
+        .load()
+        .await;
+    let s3_client = aws_sdk_s3::Client::new(&s3_config);
+    s3_client
+        .create_bucket()
+        .bucket("krafted-images")
+        .send()
+        .await
+        .expect("failed to create bucket");
+
+    let image_storage =
+        S3ImageStorage::new(Some(endpoint), Some("us-east-1".to_string()), Some(creds)).await;
+    let state = AppState::new(
+        pool,
+        "test-secret".to_string(),
+        15,
+        image_storage,
+        "krafted-images".to_string(),
+    );
+    let app = create_router(state);
+
+    let (_user_id, token) = register_user(&app, "upload@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "Upload Test", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let mut buf = std::io::Cursor::new(Vec::new());
+    let encoder = image::codecs::png::PngEncoder::new(&mut buf);
+    use image::ImageEncoder;
+    encoder
+        .write_image(&[0, 0, 0, 0], 1, 1, image::ExtendedColorType::Rgba8)
+        .unwrap();
+    let image_data = buf.into_inner();
+
+    let boundary = "----testboundary";
+    let mut body_bytes = Vec::new();
+    use std::io::Write;
+    write!(
+        body_bytes,
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n"
+    )
+    .unwrap();
+    body_bytes.extend_from_slice(&image_data);
+    write!(body_bytes, "\r\n--{boundary}--\r\n").unwrap();
+
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(&format!("/api/listings/{}/images", listing_id))
+                .header("content-type", &content_type)
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::from(bytes::Bytes::from(body_bytes)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = resp.status();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "status: {}, body: {}",
+        status,
+        String::from_utf8_lossy(&body)
+    );
+    let images: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert_eq!(images.len(), 1);
+    let image_url = images[0]["url"].as_str().unwrap().to_string();
+
+    let key = image_url
+        .strip_prefix("krafted-images/")
+        .unwrap_or(&image_url);
+
+    let stored = s3_client
+        .get_object()
+        .bucket("krafted-images")
+        .key(key)
+        .send()
+        .await
+        .expect("image should exist in S3 bucket");
+
+    let stored_bytes = stored.body.collect().await.unwrap().into_bytes();
+    assert!(!stored_bytes.is_empty(), "stored image should not be empty");
 }

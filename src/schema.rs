@@ -14,21 +14,11 @@ diesel::table! {
 }
 
 diesel::table! {
-    listings (id) {
+    favorites (id) {
         id -> Uuid,
-        seller_id -> Uuid,
-        #[max_length = 255]
-        title -> Varchar,
-        description -> Text,
-        price_cents -> Int4,
-        category_id -> Uuid,
-        #[max_length = 20]
-        status -> Varchar,
-        #[max_length = 20]
-        condition -> Varchar,
-        quantity -> Int4,
+        user_id -> Uuid,
+        listing_id -> Uuid,
         created_at -> Timestamp,
-        updated_at -> Timestamp,
     }
 }
 
@@ -44,6 +34,25 @@ diesel::table! {
         s3_key -> Varchar,
         position -> Int4,
         created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    listings (id) {
+        id -> Uuid,
+        seller_id -> Uuid,
+        #[max_length = 255]
+        title -> Varchar,
+        description -> Text,
+        price_cents -> Int4,
+        category_id -> Uuid,
+        #[max_length = 20]
+        status -> Varchar,
+        #[max_length = 20]
+        condition -> Varchar,
+        quantity -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -110,6 +119,8 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(favorites -> listings (listing_id));
+diesel::joinable!(favorites -> users (user_id));
 diesel::joinable!(listing_images -> listings (listing_id));
 diesel::joinable!(listings -> categories (category_id));
 diesel::joinable!(listings -> users (seller_id));
@@ -121,6 +132,7 @@ diesel::joinable!(user_roles -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     categories,
+    favorites,
     listing_images,
     listings,
     permissions,

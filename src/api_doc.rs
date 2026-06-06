@@ -4,6 +4,7 @@ use crate::auth::controller::{
     LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, RefreshResponse, RegisterRequest,
     UpdateProfileRequest, UserResponse,
 };
+use crate::favorites::controller::FavoriteResponse;
 use crate::listing::models::{
     Category, CreateListingRequest, ImageResponse, ListingResponse, ListingSort, PaginatedResponse,
     ReorderImagesRequest, UpdateListingRequest,
@@ -31,6 +32,9 @@ use crate::listing::models::{
         crate::listing::controller::list_images,
         crate::listing::controller::reorder_images,
         crate::listing::controller::delete_image,
+        crate::favorites::controller::add_favorite,
+        crate::favorites::controller::remove_favorite,
+        crate::favorites::controller::list_favorites,
     ),
     components(
         schemas(
@@ -48,14 +52,17 @@ use crate::listing::models::{
             Category,
             ListingSort,
             PaginatedResponse<ListingResponse>,
+            PaginatedResponse<FavoriteResponse>,
             ImageResponse,
             ReorderImagesRequest,
+            FavoriteResponse,
             crate::shared::errors::ErrorResponse,
         ),
     ),
     tags(
         (name = "auth", description = "Authentication endpoints"),
         (name = "listings", description = "Listing and category endpoints"),
+        (name = "favorites", description = "Favorite listings"),
     ),
 )]
 pub struct ApiDoc;

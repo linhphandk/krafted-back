@@ -4,6 +4,7 @@ pub mod ports;
 pub mod repository;
 pub mod service;
 
+use crate::favorites::controller as favorites_controller;
 use crate::shared::middleware::auth_middleware;
 use crate::state::AppState;
 
@@ -58,6 +59,11 @@ pub fn listing_router(state: &AppState) -> axum::Router<AppState> {
         .route(
             "/api/listings/{id}/images/{image_id}",
             axum::routing::delete(controller::delete_image),
+        )
+        .route(
+            "/api/listings/{id}/favorite",
+            axum::routing::post(favorites_controller::add_favorite)
+                .delete(favorites_controller::remove_favorite),
         )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
