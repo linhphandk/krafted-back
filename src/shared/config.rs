@@ -8,6 +8,9 @@ pub struct Config {
     pub database_pool_size: u32,
     pub jwt_secret: String,
     pub jwt_expiry_minutes: u64,
+    pub s3_bucket: String,
+    pub s3_region: String,
+    pub s3_endpoint: Option<String>,
 }
 
 impl Config {
