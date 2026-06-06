@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
 use tracing::instrument;
@@ -23,14 +24,29 @@ pub struct S3ImageStorage {
 }
 
 impl S3ImageStorage {
-    pub async fn new(endpoint: Option<String>) -> Self {
+    pub async fn new(
+        endpoint: Option<String>,
+        region: Option<String>,
+        credentials: Option<Credentials>,
+    ) -> Self {
         let loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
         let loader = match endpoint {
             Some(url) => loader.endpoint_url(url),
             None => loader,
         };
+        let loader = match region {
+            Some(r) => loader.region(Region::new(r)),
+            None => loader,
+        };
+        let loader = match credentials {
+            Some(creds) => loader.credentials_provider(creds),
+            None => loader,
+        };
         let config = loader.load().await;
-        let client = Client::new(&config);
+        let s3_config = aws_sdk_s3::config::Builder::from(&config)
+            .force_path_style(true)
+            .build();
+        let client = Client::from_conf(s3_config);
         Self { client }
     }
 }

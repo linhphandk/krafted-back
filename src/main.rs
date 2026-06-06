@@ -21,7 +21,12 @@ async fn main() {
     let pool = establish_pool(&config.database_url, config.database_pool_size);
     run_migrations(&pool);
 
-    let image_storage = S3ImageStorage::new(config.s3_endpoint.clone()).await;
+    let region = if config.s3_region.is_empty() {
+        None
+    } else {
+        Some(config.s3_region.clone())
+    };
+    let image_storage = S3ImageStorage::new(config.s3_endpoint.clone(), region, None).await;
 
     let state = AppState::new(
         pool.clone(),
