@@ -21,3 +21,10 @@ pub struct NewUser {
     pub name: String,
     pub password_hash: String,
 }
+
+#[derive(AsChangeset, Debug)]
+#[diesel(table_name = crate::schema::users)]
+pub struct UpdateUser {
+    pub name: Option<String>,
+    pub email: Option<String>,
+}

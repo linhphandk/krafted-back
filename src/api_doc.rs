@@ -2,7 +2,7 @@ use utoipa::OpenApi;
 
 use crate::auth::controller::{
     LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, RefreshResponse, RegisterRequest,
-    UserResponse,
+    UpdateProfileRequest, UserResponse,
 };
 use crate::listing::models::{
     Category, CreateListingRequest, ImageResponse, ListingResponse, ListingSort, PaginatedResponse,
@@ -17,6 +17,7 @@ use crate::listing::models::{
         crate::auth::controller::logout,
         crate::auth::controller::refresh,
         crate::auth::controller::me,
+        crate::auth::controller::update_profile,
         crate::listing::controller::list_listings,
         crate::listing::controller::get_listing,
         crate::listing::controller::create_listing,
@@ -40,6 +41,7 @@ use crate::listing::models::{
             LoginResponse,
             RefreshResponse,
             UserResponse,
+            UpdateProfileRequest,
             CreateListingRequest,
             UpdateListingRequest,
             ListingResponse,

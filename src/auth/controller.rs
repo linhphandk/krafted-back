@@ -1,6 +1,5 @@
 use axum::extract::{Extension, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -60,7 +59,7 @@ pub struct UserResponse {
     path = "/auth/register",
     request_body = RegisterRequest,
     responses(
-        (status = 201, description = "User registered", body = RegisterResponse),
+        (status = 200, description = "User registered", body = RegisterResponse),
         (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
     ),
     tag = "auth",
@@ -88,31 +87,11 @@ pub async fn register(
 }
 
 #[utoipa::path(
-    get,
-    path = "/auth/me",
-    responses(
-        (status = 200, description = "Current user info", body = UserResponse),
-        (status = 401, description = "Unauthorized"),
-    ),
-    tag = "auth",
-)]
-#[instrument(skip_all, fields(user_id = %user.id))]
-pub async fn me(Extension(user): Extension<AuthenticatedUser>) -> impl IntoResponse {
-    info!("me endpoint called");
-    let response = UserResponse {
-        id: user.id.to_string(),
-        email: user.email,
-        name: user.name,
-    };
-    (StatusCode::OK, Json(response))
-}
-
-#[utoipa::path(
     post,
     path = "/auth/login",
     request_body = LoginRequest,
     responses(
-        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 200, description = "User logged in", body = LoginResponse),
         (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
     ),
     tag = "auth",
@@ -142,7 +121,7 @@ pub async fn login(
     path = "/auth/logout",
     request_body = LogoutRequest,
     responses(
-        (status = 200, description = "Logout successful"),
+        (status = 200, description = "User logged out"),
         (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
     ),
     tag = "auth",
@@ -155,6 +134,71 @@ pub async fn logout(
     info!("logout endpoint called");
     state.auth_service.logout(req.refresh_token).await?;
     Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateProfileRequest {
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/auth/me",
+    responses(
+        (status = 200, description = "Current user", body = UserResponse),
+        (status = 401, description = "Unauthorized"),
+    ),
+    tag = "auth",
+)]
+pub async fn me(
+    Extension(user): Extension<AuthenticatedUser>,
+    State(_state): State<AppState>,
+) -> AppResult<Json<UserResponse>> {
+    info!(user_id = %user.id, "me");
+    Ok(Json(UserResponse {
+        id: user.id.to_string(),
+        email: user.email.clone(),
+        name: user.name.clone(),
+    }))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/auth/me",
+    request_body = UpdateProfileRequest,
+    responses(
+        (status = 200, description = "Profile updated", body = UserResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    tag = "auth",
+)]
+pub async fn update_profile(
+    Extension(user): Extension<AuthenticatedUser>,
+    State(state): State<AppState>,
+    Json(req): Json<UpdateProfileRequest>,
+) -> AppResult<Json<UserResponse>> {
+    info!(user_id = %user.id, "update_profile");
+
+    let data = crate::user::models::UpdateUser {
+        name: req
+            .name
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty()),
+        email: req
+            .email
+            .map(|e| e.trim().to_string())
+            .filter(|e| !e.is_empty()),
+    };
+
+    let updated = state.user_service.update_profile(user.id, data).await?;
+
+    Ok(Json(UserResponse {
+        id: updated.id.to_string(),
+        email: updated.email,
+        name: updated.name,
+    }))
 }
 
 #[derive(Deserialize, ToSchema)]

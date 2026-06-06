@@ -10,7 +10,10 @@ use axum::routing::{get, post};
 
 pub fn auth_router(state: &AppState) -> axum::Router<AppState> {
     let protected = axum::Router::<AppState>::new()
-        .route("/auth/me", get(controller::me))
+        .route(
+            "/auth/me",
+            get(controller::me).patch(controller::update_profile),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
