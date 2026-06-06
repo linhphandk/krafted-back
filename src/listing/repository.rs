@@ -5,10 +5,11 @@ use tracing::{debug, instrument};
 use uuid::Uuid;
 
 use crate::listing::models::{
-    Category, Listing, ListingFilters, ListingSort, NewListing, PaginatedResult, UpdateListing,
+    Category, Listing, ListingFilters, ListingImage, ListingSort, NewListing, NewListingImage,
+    PaginatedResult, UpdateListing,
 };
-use crate::listing::ports::{CategoryRepository, ListingRepository};
-use crate::schema::{categories, listings};
+use crate::listing::ports::{CategoryRepository, ListingImageRepository, ListingRepository};
+use crate::schema::{categories, listing_images, listings};
 use crate::shared::db::DbPool;
 use crate::shared::errors::{AppError, AppResult};
 
@@ -301,5 +302,101 @@ impl ListingRepository for DieselListingRepository {
                 tracing::error!("Database error: {:?}", e);
                 AppError::Internal
             })
+    }
+}
+
+#[derive(Clone)]
+pub struct DieselListingImageRepository {
+    pool: DbPool,
+}
+
+impl DieselListingImageRepository {
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl ListingImageRepository for DieselListingImageRepository {
+    async fn create(&self, image: NewListingImage) -> AppResult<ListingImage> {
+        debug!("create listing_image");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        diesel::insert_into(listing_images::table)
+            .values(&image)
+            .get_result::<ListingImage>(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })
+    }
+
+    async fn find_by_listing(&self, listing_id: Uuid) -> AppResult<Vec<ListingImage>> {
+        debug!("find_by_listing images");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        listing_images::table
+            .filter(listing_images::listing_id.eq(listing_id))
+            .order(listing_images::position.asc())
+            .load::<ListingImage>(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<ListingImage>> {
+        debug!("find_by_id listing_image");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        listing_images::table
+            .find(id)
+            .first::<ListingImage>(&mut conn)
+            .optional()
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })
+    }
+
+    async fn delete(&self, id: Uuid) -> AppResult<()> {
+        debug!("delete listing_image");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        let affected = diesel::delete(listing_images::table.find(id))
+            .execute(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })?;
+        if affected == 0 {
+            return Err(AppError::NotFound("Listing image not found".to_string()));
+        }
+        Ok(())
+    }
+
+    async fn next_position(&self, listing_id: Uuid) -> AppResult<i32> {
+        debug!("next_position for listing_image");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        let max_pos: Option<i32> = listing_images::table
+            .filter(listing_images::listing_id.eq(listing_id))
+            .select(diesel::dsl::max(listing_images::position))
+            .first(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })?;
+        Ok(max_pos.unwrap_or(-1) + 1)
     }
 }

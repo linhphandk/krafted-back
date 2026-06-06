@@ -303,3 +303,48 @@ impl<T: ToSchema> PaginatedResponse<T> {
         }
     }
 }
+
+#[derive(Debug, Queryable, Selectable, Clone, Serialize)]
+#[diesel(table_name = crate::schema::listing_images)]
+pub struct ListingImage {
+    pub id: Uuid,
+    pub listing_id: Uuid,
+    pub url: String,
+    pub thumbnail_url: String,
+    pub s3_key: String,
+    pub position: i32,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::schema::listing_images)]
+pub struct NewListingImage {
+    pub listing_id: Uuid,
+    pub url: String,
+    pub thumbnail_url: String,
+    pub s3_key: String,
+    pub position: i32,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ImageResponse {
+    pub id: Uuid,
+    pub listing_id: Uuid,
+    pub url: String,
+    pub thumbnail_url: String,
+    pub position: i32,
+    pub created_at: NaiveDateTime,
+}
+
+impl ImageResponse {
+    pub fn from_image(img: &ListingImage) -> Self {
+        Self {
+            id: img.id,
+            listing_id: img.listing_id,
+            url: img.url.clone(),
+            thumbnail_url: img.thumbnail_url.clone(),
+            position: img.position,
+            created_at: img.created_at,
+        }
+    }
+}
