@@ -10,10 +10,9 @@ COPY migrations ./migrations
 RUN cargo build --release
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM ubuntu:24.04
 
-# Install PostgreSQL client libraries
-RUN apt-get update && apt-get install -y libpq5 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libpq5 ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
