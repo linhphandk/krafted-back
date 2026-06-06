@@ -2,7 +2,7 @@ use tracing::{debug, instrument};
 use uuid::Uuid;
 
 use crate::shared::errors::{AppError, AppResult};
-use crate::user::models::{NewUser, User};
+use crate::user::models::{NewUser, UpdateUser, User};
 use crate::user::ports::UserRepository;
 
 #[derive(Clone)]
@@ -39,5 +39,29 @@ impl<R: UserRepository> UserService<R> {
     pub async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>> {
         debug!(user_id = %id, "find_by_id");
         self.repo.find_by_id(id).await
+    }
+
+    #[instrument(skip(self), fields(user_id = %id))]
+    pub async fn update_profile(&self, id: Uuid, data: UpdateUser) -> AppResult<User> {
+        debug!(user_id = %id, "update_profile");
+
+        if let Some(ref name) = data.name {
+            if name.trim().is_empty() {
+                return Err(AppError::BadRequest("Name cannot be empty".to_string()));
+            }
+        }
+
+        if let Some(ref email) = data.email {
+            if email.trim().is_empty() {
+                return Err(AppError::BadRequest("Email cannot be empty".to_string()));
+            }
+            if let Some(existing) = self.repo.find_by_email(email).await? {
+                if existing.id != id {
+                    return Err(AppError::BadRequest("Email already in use".to_string()));
+                }
+            }
+        }
+
+        self.repo.update(id, data).await
     }
 }

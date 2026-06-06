@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::schema::users;
 use crate::shared::db::DbPool;
 use crate::shared::errors::{AppError, AppResult};
-use crate::user::models::{NewUser, User};
+use crate::user::models::{NewUser, UpdateUser, User};
 use crate::user::ports::UserRepository;
 
 #[derive(Clone)]
@@ -80,5 +80,18 @@ impl UserRepository for DieselUserRepository {
                 tracing::error!("Database error: {:?}", e);
                 AppError::Internal
             })
+    }
+
+    #[instrument(skip(self), fields(user_id = %id))]
+    async fn update(&self, id: Uuid, data: UpdateUser) -> AppResult<User> {
+        debug!(user_id = %id, "update user");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        diesel::update(users::table.find(id))
+            .set(&data)
+            .get_result::<User>(&mut conn)
+            .map_err(|e| map_diesel_error(e, "User"))
     }
 }
