@@ -26,7 +26,7 @@ async fn main() {
     } else {
         Some(config.s3_region.clone())
     };
-    let image_storage = S3ImageStorage::new(config.s3_endpoint.clone(), region, None).await;
+    let image_storage = S3ImageStorage::new(config.s3_endpoint.clone(), region).await;
 
     let state = AppState::new(
         pool.clone(),
