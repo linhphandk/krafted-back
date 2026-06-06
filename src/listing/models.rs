@@ -348,3 +348,8 @@ impl ImageResponse {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ReorderImagesRequest {
+    pub image_ids: Vec<Uuid>,
+}

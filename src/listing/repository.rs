@@ -399,4 +399,20 @@ impl ListingImageRepository for DieselListingImageRepository {
             })?;
         Ok(max_pos.unwrap_or(-1) + 1)
     }
+
+    async fn update_position(&self, id: Uuid, position: i32) -> AppResult<()> {
+        debug!(image_id = %id, position, "update_position listing_image");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        diesel::update(listing_images::table.find(id))
+            .set(listing_images::position.eq(position))
+            .execute(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })?;
+        Ok(())
+    }
 }

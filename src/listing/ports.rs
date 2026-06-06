@@ -42,4 +42,5 @@ pub trait ListingImageRepository: Send + Sync {
     async fn find_by_id(&self, id: Uuid) -> AppResult<Option<ListingImage>>;
     async fn delete(&self, id: Uuid) -> AppResult<()>;
     async fn next_position(&self, listing_id: Uuid) -> AppResult<i32>;
+    async fn update_position(&self, id: Uuid, position: i32) -> AppResult<()>;
 }
