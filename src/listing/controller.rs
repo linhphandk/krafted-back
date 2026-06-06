@@ -1,4 +1,4 @@
-use axum::extract::{Path, Query, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use serde::Deserialize;
@@ -6,11 +6,13 @@ use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
 use crate::listing::models::{
-    CategoryKind, CreateListingRequest, ListingFilters, ListingResponse, ListingSort,
-    PaginatedResponse, PaginatedResult, UpdateListingRequest,
+    CategoryKind, CreateListingRequest, ImageResponse, ListingFilters, ListingResponse,
+    ListingSort, PaginatedResponse, PaginatedResult, ReorderImagesRequest, UpdateListingRequest,
 };
 use crate::shared::errors::{AppError, AppResult};
 use crate::state::AppState;
+
+const MAX_IMAGE_SIZE: usize = 500 * 1024;
 
 #[derive(Debug, Deserialize)]
 pub struct ListListingsQuery {
@@ -397,4 +399,165 @@ pub async fn list_categories(
             Ok(Json(categories))
         }
     }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/listings/{id}/images",
+    params(
+        ("id" = Uuid, Path, description = "Listing UUID"),
+    ),
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 201, description = "Images uploaded", body = Vec<ImageResponse>),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Listing not found"),
+    ),
+    tag = "listings",
+)]
+pub async fn upload_images(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> AppResult<(StatusCode, Json<Vec<ImageResponse>>)> {
+    let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, listing_id = %id, "upload_images");
+
+    let mut files: Vec<(Vec<u8>, String, Option<i32>)> = Vec::new();
+    let mut positions_json: Option<String> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "files" {
+            let content_type = field
+                .content_type()
+                .unwrap_or("application/octet-stream")
+                .to_string();
+            let data = field.bytes().await.map_err(|e| {
+                warn!(error = %e, "failed to read multipart file");
+                AppError::BadRequest("Failed to read file".to_string())
+            })?;
+
+            if data.len() > MAX_IMAGE_SIZE {
+                warn!(size = data.len(), "file exceeds 500KB");
+                return Err(AppError::BadRequest(
+                    "File exceeds maximum size of 500KB".to_string(),
+                ));
+            }
+
+            files.push((data.to_vec(), content_type, None));
+        } else if name == "positions" {
+            let text = field.text().await.map_err(|e| {
+                warn!(error = %e, "failed to read positions field");
+                AppError::BadRequest("Failed to read positions".to_string())
+            })?;
+            positions_json = Some(text);
+        }
+    }
+
+    if let Some(json) = positions_json {
+        let positions: Vec<Option<i32>> = serde_json::from_str(&json).map_err(|e| {
+            warn!(error = %e, "invalid positions JSON");
+            AppError::BadRequest("Invalid positions format".to_string())
+        })?;
+        for (i, pos) in positions.into_iter().enumerate() {
+            if let Some(file) = files.get_mut(i) {
+                file.2 = pos;
+            }
+        }
+    }
+
+    if files.is_empty() {
+        return Err(AppError::BadRequest("No files provided".to_string()));
+    }
+
+    let result = state
+        .listing_image_service
+        .upload_images(id, seller_id, files)
+        .await?;
+
+    Ok((StatusCode::CREATED, Json(result)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/listings/{id}/images",
+    params(
+        ("id" = Uuid, Path, description = "Listing UUID"),
+    ),
+    responses(
+        (status = 200, description = "List of images", body = Vec<ImageResponse>),
+    ),
+    tag = "listings",
+)]
+pub async fn list_images(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> AppResult<Json<Vec<ImageResponse>>> {
+    info!(listing_id = %id, "list_images");
+    let images = state.listing_image_service.list_images(id).await?;
+    Ok(Json(images))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/listings/{id}/images/reorder",
+    params(
+        ("id" = Uuid, Path, description = "Listing UUID"),
+    ),
+    request_body = ReorderImagesRequest,
+    responses(
+        (status = 200, description = "Images reordered"),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Listing not found"),
+    ),
+    tag = "listings",
+)]
+pub async fn reorder_images(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(req): Json<ReorderImagesRequest>,
+) -> AppResult<Json<()>> {
+    let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, listing_id = %id, "reorder_images");
+    state
+        .listing_image_service
+        .reorder_images(id, seller_id, req.image_ids)
+        .await?;
+    Ok(Json(()))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/listings/{id}/images/{image_id}",
+    params(
+        ("id" = Uuid, Path, description = "Listing UUID"),
+        ("image_id" = Uuid, Path, description = "Image UUID"),
+    ),
+    responses(
+        (status = 204, description = "Image deleted"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Listing or image not found"),
+    ),
+    tag = "listings",
+)]
+pub async fn delete_image(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, image_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<StatusCode> {
+    let seller_id = extract_seller_id(&headers)?;
+    info!(seller_id = %seller_id, listing_id = %id, image_id = %image_id, "delete_image");
+    state
+        .listing_image_service
+        .delete_image(id, image_id, seller_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

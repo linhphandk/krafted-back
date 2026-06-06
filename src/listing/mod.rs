@@ -31,6 +31,18 @@ pub fn listing_router() -> axum::Router<AppState> {
             axum::routing::post(controller::pause_listing),
         )
         .route(
+            "/api/listings/{id}/images",
+            axum::routing::get(controller::list_images).post(controller::upload_images),
+        )
+        .route(
+            "/api/listings/{id}/images/reorder",
+            axum::routing::put(controller::reorder_images),
+        )
+        .route(
+            "/api/listings/{id}/images/{image_id}",
+            axum::routing::delete(controller::delete_image),
+        )
+        .route(
             "/api/categories",
             axum::routing::get(controller::list_categories),
         )
