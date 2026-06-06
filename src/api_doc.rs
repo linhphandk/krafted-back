@@ -5,8 +5,8 @@ use crate::auth::controller::{
     UserResponse,
 };
 use crate::listing::models::{
-    Category, CreateListingRequest, ListingResponse, ListingSort, PaginatedResponse,
-    UpdateListingRequest,
+    Category, CreateListingRequest, ImageResponse, ListingResponse, ListingSort, PaginatedResponse,
+    ReorderImagesRequest, UpdateListingRequest,
 };
 
 #[derive(OpenApi)]
@@ -26,6 +26,10 @@ use crate::listing::models::{
         crate::listing::controller::pause_listing,
         crate::listing::controller::seller_listings,
         crate::listing::controller::list_categories,
+        crate::listing::controller::upload_images,
+        crate::listing::controller::list_images,
+        crate::listing::controller::reorder_images,
+        crate::listing::controller::delete_image,
     ),
     components(
         schemas(
@@ -42,6 +46,8 @@ use crate::listing::models::{
             Category,
             ListingSort,
             PaginatedResponse<ListingResponse>,
+            ImageResponse,
+            ReorderImagesRequest,
             crate::shared::errors::ErrorResponse,
         ),
     ),

@@ -2,6 +2,7 @@ use axum::body::Body;
 use axum::http::StatusCode;
 use krafted_back::router::create_router;
 use krafted_back::shared::db::{establish_pool, run_migrations};
+use krafted_back::shared::image_storage::S3ImageStorage;
 use krafted_back::state::AppState;
 use serde_json::json;
 use testcontainers::clients::Cli;
@@ -9,14 +10,21 @@ use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::Router) {
+async fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::Router) {
     let container = docker.run(Postgres::default());
     let port = container.get_host_port_ipv4(5432);
     let db_url = format!("postgres://postgres:postgres@localhost:{}/postgres", port);
     let pool = establish_pool(&db_url, 4);
     run_migrations(&pool);
 
-    let state = AppState::new(pool, "test-secret".to_string(), 15);
+    let image_storage = S3ImageStorage::new(Some("http://localhost:19000".to_string())).await;
+    let state = AppState::new(
+        pool,
+        "test-secret".to_string(),
+        15,
+        image_storage,
+        "test-bucket".to_string(),
+    );
     let app = create_router(state);
     (container, app)
 }
@@ -132,7 +140,7 @@ async fn publish_listing(app: &axum::Router, listing_id: &str, seller_id: Uuid) 
 #[tokio::test]
 async fn test_list_categories() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let resp = app
         .clone()
         .oneshot(
@@ -157,7 +165,7 @@ async fn test_list_categories() {
 #[tokio::test]
 async fn test_list_categories_filter_by_kind() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let resp = app
         .clone()
         .oneshot(
@@ -186,7 +194,7 @@ async fn test_list_categories_filter_by_kind() {
 #[tokio::test]
 async fn test_list_listings_empty() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let resp = app
         .clone()
         .oneshot(
@@ -211,7 +219,7 @@ async fn test_list_listings_empty() {
 #[tokio::test]
 async fn test_create_listing_requires_auth() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let cid = first_category_id(&app).await;
     let resp = app
         .clone()
@@ -232,7 +240,7 @@ async fn test_create_listing_requires_auth() {
 #[tokio::test]
 async fn test_create_listing_invalid_body() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "invalid-body@test.com").await;
     let resp = app
         .clone()
@@ -256,7 +264,7 @@ async fn test_create_listing_invalid_body() {
 #[tokio::test]
 async fn test_create_and_get_listing() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "create-get@test.com").await;
     let cid = first_category_id(&app).await;
 
@@ -311,7 +319,7 @@ async fn test_create_and_get_listing() {
 #[tokio::test]
 async fn test_get_listing_not_found() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let resp = app
         .clone()
         .oneshot(
@@ -332,7 +340,7 @@ async fn test_get_listing_not_found() {
 #[tokio::test]
 async fn test_update_listing_owner_only() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "owner1@test.com").await;
     let (other_id, _) = register_user(&app, "owner2@test.com").await;
     let cid = first_category_id(&app).await;
@@ -361,7 +369,7 @@ async fn test_update_listing_owner_only() {
 #[tokio::test]
 async fn test_delete_listing_owner_only() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "del-owner@test.com").await;
     let (other_id, _) = register_user(&app, "del-other@test.com").await;
     let cid = first_category_id(&app).await;
@@ -387,7 +395,7 @@ async fn test_delete_listing_owner_only() {
 #[tokio::test]
 async fn test_publish_listing_owner_only() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "pub-owner@test.com").await;
     let (other_id, _) = register_user(&app, "pub-other@test.com").await;
     let cid = first_category_id(&app).await;
@@ -415,7 +423,7 @@ async fn test_publish_listing_owner_only() {
 #[tokio::test]
 async fn test_publish_and_list_active() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "publish@test.com").await;
     let cid = first_category_id(&app).await;
     let created = create_listing(&app, "Publishable Item", &cid, seller_id).await;
@@ -445,7 +453,7 @@ async fn test_publish_and_list_active() {
 #[tokio::test]
 async fn test_pause_listing() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "pause@test.com").await;
     let cid = first_category_id(&app).await;
     let created = create_listing(&app, "Pausable", &cid, seller_id).await;
@@ -485,7 +493,7 @@ async fn test_pause_listing() {
 #[tokio::test]
 async fn test_delete_listing() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "delete@test.com").await;
     let cid = first_category_id(&app).await;
     let created = create_listing(&app, "To Delete", &cid, seller_id).await;
@@ -524,7 +532,7 @@ async fn test_delete_listing() {
 #[tokio::test]
 async fn test_seller_listings() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "seller@test.com").await;
     let cid = first_category_id(&app).await;
 
@@ -555,7 +563,7 @@ async fn test_seller_listings() {
 #[tokio::test]
 async fn test_seller_listings_requires_auth() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let resp = app
         .clone()
         .oneshot(
@@ -576,7 +584,7 @@ async fn test_seller_listings_requires_auth() {
 #[tokio::test]
 async fn test_listings_pagination() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "pagination@test.com").await;
     let cid = first_category_id(&app).await;
 
@@ -630,7 +638,7 @@ async fn test_listings_pagination() {
 #[tokio::test]
 async fn test_search_listings() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "search@test.com").await;
     let cid = first_category_id(&app).await;
 
@@ -661,7 +669,7 @@ async fn test_search_listings() {
 #[tokio::test]
 async fn test_sort_by_price() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
     let (seller_id, _) = register_user(&app, "sort@test.com").await;
     let cid = first_category_id(&app).await;
 

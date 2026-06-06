@@ -1,20 +1,28 @@
 use axum::http::StatusCode;
 use krafted_back::router::create_router;
 use krafted_back::shared::db::{establish_pool, run_migrations};
+use krafted_back::shared::image_storage::S3ImageStorage;
 use krafted_back::state::AppState;
 use serde_json::json;
 use testcontainers::clients::Cli;
 use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
 
-fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::Router) {
+async fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::Router) {
     let container = docker.run(Postgres::default());
     let port = container.get_host_port_ipv4(5432);
     let db_url = format!("postgres://postgres:postgres@localhost:{}/postgres", port);
     let pool = establish_pool(&db_url, 4);
     run_migrations(&pool);
 
-    let state = AppState::new(pool, "test-secret".to_string(), 15);
+    let image_storage = S3ImageStorage::new(Some("http://localhost:19000".to_string())).await;
+    let state = AppState::new(
+        pool,
+        "test-secret".to_string(),
+        15,
+        image_storage,
+        "test-bucket".to_string(),
+    );
     let app = create_router(state);
     (container, app)
 }
@@ -22,7 +30,7 @@ fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::Router
 #[tokio::test]
 async fn test_register_and_login_e2e() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     let register_response = app
         .clone()
@@ -85,7 +93,7 @@ async fn test_register_and_login_e2e() {
 #[tokio::test]
 async fn test_login_wrong_password() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     app.clone()
         .oneshot(
@@ -131,7 +139,7 @@ async fn test_login_wrong_password() {
 #[tokio::test]
 async fn test_login_nonexistent_user() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     let response = app
         .clone()
@@ -158,7 +166,7 @@ async fn test_login_nonexistent_user() {
 #[tokio::test]
 async fn test_logout_e2e() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     app.clone()
         .oneshot(
@@ -228,7 +236,7 @@ async fn test_logout_e2e() {
 #[tokio::test]
 async fn test_refresh_token_e2e() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     app.clone()
         .oneshot(
@@ -306,7 +314,7 @@ async fn test_refresh_token_e2e() {
 #[tokio::test]
 async fn test_auth_middleware_missing_token() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     let response = app
         .clone()
@@ -327,7 +335,7 @@ async fn test_auth_middleware_missing_token() {
 #[tokio::test]
 async fn test_auth_middleware_invalid_token() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     let response = app
         .clone()
@@ -349,7 +357,7 @@ async fn test_auth_middleware_invalid_token() {
 #[tokio::test]
 async fn test_me_endpoint_success() {
     let docker = Cli::default();
-    let (_container, app) = setup(&docker);
+    let (_container, app) = setup(&docker).await;
 
     app.clone()
         .oneshot(
