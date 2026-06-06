@@ -21,7 +21,7 @@ services:
 
   app:
     container_name: krafted-back
-    build: .
+    image: ghcr.io/linhphandk/krafted-back:latest
     restart: unless-stopped
     environment:
       - SERVER_HOST=0.0.0.0
