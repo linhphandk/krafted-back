@@ -33,6 +33,21 @@ diesel::table! {
 }
 
 diesel::table! {
+    listing_images (id) {
+        id -> Uuid,
+        listing_id -> Uuid,
+        #[max_length = 1024]
+        url -> Varchar,
+        #[max_length = 1024]
+        thumbnail_url -> Varchar,
+        #[max_length = 512]
+        s3_key -> Varchar,
+        position -> Int4,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     permissions (id) {
         id -> Uuid,
         #[max_length = 100]
@@ -95,6 +110,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(listing_images -> listings (listing_id));
 diesel::joinable!(listings -> categories (category_id));
 diesel::joinable!(listings -> users (seller_id));
 diesel::joinable!(role_permissions -> permissions (permission_id));
@@ -105,6 +121,7 @@ diesel::joinable!(user_roles -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     categories,
+    listing_images,
     listings,
     permissions,
     role_permissions,
