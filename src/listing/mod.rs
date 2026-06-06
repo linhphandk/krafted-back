@@ -4,13 +4,32 @@ pub mod ports;
 pub mod repository;
 pub mod service;
 
+use crate::shared::middleware::auth_middleware;
 use crate::state::AppState;
 
-pub fn listing_router() -> axum::Router<AppState> {
-    axum::Router::<AppState>::new()
+pub fn listing_router(state: &AppState) -> axum::Router<AppState> {
+    let public_routes = axum::Router::<AppState>::new()
         .route(
             "/api/listings",
-            axum::routing::get(controller::list_listings).post(controller::create_listing),
+            axum::routing::get(controller::list_listings),
+        )
+        .route(
+            "/api/listings/{id}",
+            axum::routing::get(controller::get_listing),
+        )
+        .route(
+            "/api/listings/{id}/images",
+            axum::routing::get(controller::list_images),
+        )
+        .route(
+            "/api/categories",
+            axum::routing::get(controller::list_categories),
+        );
+
+    let protected_routes = axum::Router::<AppState>::new()
+        .route(
+            "/api/listings",
+            axum::routing::post(controller::create_listing),
         )
         .route(
             "/api/listings/mine",
@@ -18,9 +37,7 @@ pub fn listing_router() -> axum::Router<AppState> {
         )
         .route(
             "/api/listings/{id}",
-            axum::routing::get(controller::get_listing)
-                .patch(controller::update_listing)
-                .delete(controller::delete_listing),
+            axum::routing::patch(controller::update_listing).delete(controller::delete_listing),
         )
         .route(
             "/api/listings/{id}/publish",
@@ -32,7 +49,7 @@ pub fn listing_router() -> axum::Router<AppState> {
         )
         .route(
             "/api/listings/{id}/images",
-            axum::routing::get(controller::list_images).post(controller::upload_images),
+            axum::routing::post(controller::upload_images),
         )
         .route(
             "/api/listings/{id}/images/reorder",
@@ -42,8 +59,10 @@ pub fn listing_router() -> axum::Router<AppState> {
             "/api/listings/{id}/images/{image_id}",
             axum::routing::delete(controller::delete_image),
         )
-        .route(
-            "/api/categories",
-            axum::routing::get(controller::list_categories),
-        )
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
+
+    public_routes.merge(protected_routes)
 }
