@@ -250,6 +250,7 @@ pub struct ListingResponse {
     pub status: String,
     pub condition: String,
     pub quantity: i32,
+    pub images: Vec<ImageResponse>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -259,6 +260,7 @@ impl ListingResponse {
         listing: &Listing,
         category_name: Option<String>,
         seller_name: Option<String>,
+        images: Vec<ImageResponse>,
     ) -> Self {
         Self {
             id: listing.id.to_string(),
@@ -272,6 +274,7 @@ impl ListingResponse {
             status: listing.status.clone(),
             condition: listing.condition.clone(),
             quantity: listing.quantity,
+            images,
             created_at: listing.created_at.to_string(),
             updated_at: listing.updated_at.to_string(),
         }

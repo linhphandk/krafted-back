@@ -61,8 +61,9 @@ fn to_listing_response(
     listing: crate::listing::models::Listing,
     category_name: Option<String>,
     seller_name: Option<String>,
+    images: Vec<ImageResponse>,
 ) -> ListingResponse {
-    ListingResponse::from_listing(&listing, category_name, seller_name)
+    ListingResponse::from_listing(&listing, category_name, seller_name, images)
 }
 
 async fn listing_with_category_and_seller(
@@ -71,7 +72,12 @@ async fn listing_with_category_and_seller(
 ) -> ListingResponse {
     let category_name = get_category_name(state, listing.category_id).await;
     let seller_name = get_seller_name(state, listing.seller_id).await;
-    to_listing_response(listing, category_name, seller_name)
+    let images = state
+        .listing_image_service
+        .list_images(listing.id)
+        .await
+        .unwrap_or_default();
+    to_listing_response(listing, category_name, seller_name, images)
 }
 
 #[utoipa::path(
@@ -161,10 +167,16 @@ pub async fn get_listing(
     let listing = state.listing_service.get_listing(id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
+    let images = state
+        .listing_image_service
+        .list_images(listing.id)
+        .await
+        .unwrap_or_default();
     Ok(Json(to_listing_response(
         listing,
         category_name,
         seller_name,
+        images,
     )))
 }
 
@@ -189,9 +201,15 @@ pub async fn create_listing(
     let listing = state.listing_service.create_listing(user.id, req).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
+    let images = Vec::new();
     Ok((
         StatusCode::CREATED,
-        Json(to_listing_response(listing, category_name, seller_name)),
+        Json(to_listing_response(
+            listing,
+            category_name,
+            seller_name,
+            images,
+        )),
     ))
 }
 
@@ -222,10 +240,16 @@ pub async fn update_listing(
         .await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
+    let images = state
+        .listing_image_service
+        .list_images(listing.id)
+        .await
+        .unwrap_or_default();
     Ok(Json(to_listing_response(
         listing,
         category_name,
         seller_name,
+        images,
     )))
 }
 
@@ -272,10 +296,16 @@ pub async fn publish_listing(
     let listing = state.listing_service.publish_listing(id, user.id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
+    let images = state
+        .listing_image_service
+        .list_images(listing.id)
+        .await
+        .unwrap_or_default();
     Ok(Json(to_listing_response(
         listing,
         category_name,
         seller_name,
+        images,
     )))
 }
 
@@ -300,10 +330,16 @@ pub async fn pause_listing(
     let listing = state.listing_service.pause_listing(id, user.id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
+    let images = state
+        .listing_image_service
+        .list_images(listing.id)
+        .await
+        .unwrap_or_default();
     Ok(Json(to_listing_response(
         listing,
         category_name,
         seller_name,
+        images,
     )))
 }
 
