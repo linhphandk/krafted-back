@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::listing::models::{
-    Category, Listing, ListingFilters, NewListing, PaginatedResult, UpdateListing,
+    Category, Listing, ListingFilters, ListingImage, NewListing, NewListingImage, PaginatedResult,
+    UpdateListing,
 };
 use crate::shared::errors::AppResult;
 
@@ -32,4 +33,13 @@ pub trait ListingRepository: Send + Sync {
     async fn update(&self, id: Uuid, data: UpdateListing) -> AppResult<Listing>;
     async fn delete(&self, id: Uuid) -> AppResult<()>;
     async fn count_by_seller(&self, seller_id: Uuid) -> AppResult<i64>;
+}
+
+#[async_trait]
+pub trait ListingImageRepository: Send + Sync {
+    async fn create(&self, image: NewListingImage) -> AppResult<ListingImage>;
+    async fn find_by_listing(&self, listing_id: Uuid) -> AppResult<Vec<ListingImage>>;
+    async fn find_by_id(&self, id: Uuid) -> AppResult<Option<ListingImage>>;
+    async fn delete(&self, id: Uuid) -> AppResult<()>;
+    async fn next_position(&self, listing_id: Uuid) -> AppResult<i32>;
 }
