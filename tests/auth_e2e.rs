@@ -15,7 +15,7 @@ async fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::
     let pool = establish_pool(&db_url, 4);
     run_migrations(&pool);
 
-    let image_storage = S3ImageStorage::new(Some("http://localhost:19000".to_string())).await;
+    let image_storage = S3ImageStorage::new(Some("http://localhost:19000".to_string()), None, None).await;
     let state = AppState::new(
         pool,
         "test-secret".to_string(),

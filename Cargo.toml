@@ -34,5 +34,5 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 [dev-dependencies]
 tokio-test = "0.4"
 testcontainers = "0.15"
-testcontainers-modules = { version = "0.3", features = ["postgres"] }
+testcontainers-modules = { version = "0.3", features = ["postgres", "minio"] }
 tower = "0.5"
