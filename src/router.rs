@@ -15,7 +15,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api-docs/openapi.json", get(openapi_json))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()))
         .merge(auth_router(&state))
-        .merge(listing_router())
+        .merge(listing_router(&state))
         .with_state(state)
 }
 

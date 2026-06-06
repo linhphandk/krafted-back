@@ -1,5 +1,5 @@
-use axum::extract::{Multipart, Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::extract::{Extension, Multipart, Path, Query, State};
+use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use tracing::{info, instrument, warn};
@@ -10,6 +10,7 @@ use crate::listing::models::{
     ListingSort, PaginatedResponse, PaginatedResult, ReorderImagesRequest, UpdateListingRequest,
 };
 use crate::shared::errors::{AppError, AppResult};
+use crate::shared::types::AuthenticatedUser;
 use crate::state::AppState;
 
 const MAX_IMAGE_SIZE: usize = 500 * 1024;
@@ -34,18 +35,6 @@ pub struct ListCategoriesQuery {
 pub struct PageQuery {
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-}
-
-#[instrument(skip_all)]
-fn extract_seller_id(headers: &HeaderMap) -> AppResult<Uuid> {
-    let result = headers
-        .get("x-seller-id")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| Uuid::parse_str(s).ok());
-    if result.is_none() {
-        warn!("missing or invalid x-seller-id header");
-    }
-    result.ok_or_else(|| AppError::Unauthorized("Missing x-seller-id header".to_string()))
 }
 
 async fn get_category_name(state: &AppState, category_id: Uuid) -> Option<String> {
@@ -190,15 +179,14 @@ pub async fn get_listing(
     ),
     tag = "listings",
 )]
-#[instrument(skip(state, headers, req), fields(title = %req.title))]
+#[instrument(skip(state, req), fields(title = %req.title))]
 pub async fn create_listing(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Json(req): Json<CreateListingRequest>,
 ) -> AppResult<(StatusCode, Json<ListingResponse>)> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, "create_listing");
-    let listing = state.listing_service.create_listing(seller_id, req).await?;
+    info!(seller_id = %user.id, "create_listing");
+    let listing = state.listing_service.create_listing(user.id, req).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
     Ok((
@@ -220,18 +208,17 @@ pub async fn create_listing(
     ),
     tag = "listings",
 )]
-#[instrument(skip(state, headers, req), fields(listing_id = %id))]
+#[instrument(skip(state, req), fields(listing_id = %id))]
 pub async fn update_listing(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateListingRequest>,
 ) -> AppResult<Json<ListingResponse>> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, "update_listing");
+    info!(seller_id = %user.id, "update_listing");
     let listing = state
         .listing_service
-        .update_listing(id, seller_id, req)
+        .update_listing(id, user.id, req)
         .await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
@@ -253,15 +240,14 @@ pub async fn update_listing(
     ),
     tag = "listings",
 )]
-#[instrument(skip(state, headers), fields(listing_id = %id))]
+#[instrument(skip(state), fields(listing_id = %id))]
 pub async fn delete_listing(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(id): Path<Uuid>,
 ) -> AppResult<StatusCode> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, "delete_listing");
-    state.listing_service.delete_listing(id, seller_id).await?;
+    info!(seller_id = %user.id, "delete_listing");
+    state.listing_service.delete_listing(id, user.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -276,15 +262,14 @@ pub async fn delete_listing(
     ),
     tag = "listings",
 )]
-#[instrument(skip(state, headers), fields(listing_id = %id))]
+#[instrument(skip(state), fields(listing_id = %id))]
 pub async fn publish_listing(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ListingResponse>> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, "publish_listing");
-    let listing = state.listing_service.publish_listing(id, seller_id).await?;
+    info!(seller_id = %user.id, "publish_listing");
+    let listing = state.listing_service.publish_listing(id, user.id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
     Ok(Json(to_listing_response(
@@ -305,15 +290,14 @@ pub async fn publish_listing(
     ),
     tag = "listings",
 )]
-#[instrument(skip(state, headers), fields(listing_id = %id))]
+#[instrument(skip(state), fields(listing_id = %id))]
 pub async fn pause_listing(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<ListingResponse>> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, "pause_listing");
-    let listing = state.listing_service.pause_listing(id, seller_id).await?;
+    info!(seller_id = %user.id, "pause_listing");
+    let listing = state.listing_service.pause_listing(id, user.id).await?;
     let category_name = get_category_name(&state, listing.category_id).await;
     let seller_name = get_seller_name(&state, listing.seller_id).await;
     Ok(Json(to_listing_response(
@@ -336,21 +320,20 @@ pub async fn pause_listing(
     ),
     tag = "listings",
 )]
-#[instrument(skip(state, headers), fields(page, per_page))]
+#[instrument(skip(state), fields(page, per_page))]
 pub async fn seller_listings(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Query(query): Query<PageQuery>,
 ) -> AppResult<Json<PaginatedResponse<ListingResponse>>> {
-    let seller_id = extract_seller_id(&headers)?;
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 100);
 
-    info!(seller_id = %seller_id, page, per_page, "seller_listings");
+    info!(seller_id = %user.id, page, per_page, "seller_listings");
 
     let result = state
         .listing_service
-        .list_my_listings(seller_id, page, per_page)
+        .list_my_listings(user.id, page, per_page)
         .await?;
 
     let mut items = Vec::with_capacity(result.items.len());
@@ -419,12 +402,11 @@ pub async fn list_categories(
 )]
 pub async fn upload_images(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> AppResult<(StatusCode, Json<Vec<ImageResponse>>)> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, listing_id = %id, "upload_images");
+    info!(seller_id = %user.id, listing_id = %id, "upload_images");
 
     let mut files: Vec<(Vec<u8>, String, Option<i32>)> = Vec::new();
     let mut positions_json: Option<String> = None;
@@ -476,7 +458,7 @@ pub async fn upload_images(
 
     let result = state
         .listing_image_service
-        .upload_images(id, seller_id, files)
+        .upload_images(id, user.id, files)
         .await?;
 
     Ok((StatusCode::CREATED, Json(result)))
@@ -520,15 +502,14 @@ pub async fn list_images(
 )]
 pub async fn reorder_images(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(id): Path<Uuid>,
     Json(req): Json<ReorderImagesRequest>,
 ) -> AppResult<Json<()>> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, listing_id = %id, "reorder_images");
+    info!(seller_id = %user.id, listing_id = %id, "reorder_images");
     state
         .listing_image_service
-        .reorder_images(id, seller_id, req.image_ids)
+        .reorder_images(id, user.id, req.image_ids)
         .await?;
     Ok(Json(()))
 }
@@ -550,14 +531,13 @@ pub async fn reorder_images(
 )]
 pub async fn delete_image(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    Extension(user): Extension<AuthenticatedUser>,
     Path((id, image_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<StatusCode> {
-    let seller_id = extract_seller_id(&headers)?;
-    info!(seller_id = %seller_id, listing_id = %id, image_id = %image_id, "delete_image");
+    info!(seller_id = %user.id, listing_id = %id, image_id = %image_id, "delete_image");
     state
         .listing_image_service
-        .delete_image(id, image_id, seller_id)
+        .delete_image(id, image_id, user.id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

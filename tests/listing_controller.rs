@@ -93,7 +93,7 @@ async fn create_listing(
     app: &axum::Router,
     title: &str,
     category_id: &str,
-    seller_id: Uuid,
+    token: &str,
 ) -> serde_json::Value {
     let resp = app
         .clone()
@@ -102,7 +102,7 @@ async fn create_listing(
                 .method("POST")
                 .uri("/api/listings")
                 .header("content-type", "application/json")
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::from(create_body(title, category_id)))
                 .unwrap(),
         )
@@ -121,13 +121,13 @@ async fn create_listing(
     serde_json::from_slice(&body).unwrap()
 }
 
-async fn publish_listing(app: &axum::Router, listing_id: &str, seller_id: Uuid) {
+async fn publish_listing(app: &axum::Router, listing_id: &str, token: &str) {
     app.clone()
         .oneshot(
             axum::http::Request::builder()
                 .method("POST")
                 .uri(&format!("/api/listings/{}/publish", listing_id))
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -241,7 +241,7 @@ async fn test_create_listing_requires_auth() {
 async fn test_create_listing_invalid_body() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "invalid-body@test.com").await;
+    let (_seller_id, token) = register_user(&app, "invalid-body@test.com").await;
     let resp = app
         .clone()
         .oneshot(
@@ -249,7 +249,7 @@ async fn test_create_listing_invalid_body() {
                 .method("POST")
                 .uri("/api/listings")
                 .header("content-type", "application/json")
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::from(
                     serde_json::to_string(&json!({"title": "only title"})).unwrap(),
                 ))
@@ -265,7 +265,7 @@ async fn test_create_listing_invalid_body() {
 async fn test_create_and_get_listing() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "create-get@test.com").await;
+    let (seller_id, token) = register_user(&app, "create-get@test.com").await;
     let cid = first_category_id(&app).await;
 
     let resp = app
@@ -275,7 +275,7 @@ async fn test_create_and_get_listing() {
                 .method("POST")
                 .uri("/api/listings")
                 .header("content-type", "application/json")
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::from(create_body("Handmade Vase", &cid)))
                 .unwrap(),
         )
@@ -341,10 +341,10 @@ async fn test_get_listing_not_found() {
 async fn test_update_listing_owner_only() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "owner1@test.com").await;
-    let (other_id, _) = register_user(&app, "owner2@test.com").await;
+    let (_seller_id, token) = register_user(&app, "owner1@test.com").await;
+    let (_other_id, other_token) = register_user(&app, "owner2@test.com").await;
     let cid = first_category_id(&app).await;
-    let created = create_listing(&app, "My Item", &cid, seller_id).await;
+    let created = create_listing(&app, "My Item", &cid, &token).await;
     let listing_id = created["id"].as_str().unwrap().to_string();
 
     let resp = app
@@ -354,7 +354,7 @@ async fn test_update_listing_owner_only() {
                 .method("PATCH")
                 .uri(&format!("/api/listings/{}", listing_id))
                 .header("content-type", "application/json")
-                .header("x-seller-id", other_id.to_string())
+                .header("Authorization", format!("Bearer {}", other_token))
                 .body(Body::from(
                     serde_json::to_string(&json!({"title": "Hacked"})).unwrap(),
                 ))
@@ -370,10 +370,10 @@ async fn test_update_listing_owner_only() {
 async fn test_delete_listing_owner_only() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "del-owner@test.com").await;
-    let (other_id, _) = register_user(&app, "del-other@test.com").await;
+    let (_seller_id, token) = register_user(&app, "del-owner@test.com").await;
+    let (_other_id, other_token) = register_user(&app, "del-other@test.com").await;
     let cid = first_category_id(&app).await;
-    let created = create_listing(&app, "To Delete", &cid, seller_id).await;
+    let created = create_listing(&app, "To Delete", &cid, &token).await;
     let listing_id = created["id"].as_str().unwrap().to_string();
 
     let resp = app
@@ -382,7 +382,7 @@ async fn test_delete_listing_owner_only() {
             axum::http::Request::builder()
                 .method("DELETE")
                 .uri(&format!("/api/listings/{}", listing_id))
-                .header("x-seller-id", other_id.to_string())
+                .header("Authorization", format!("Bearer {}", other_token))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -396,10 +396,10 @@ async fn test_delete_listing_owner_only() {
 async fn test_publish_listing_owner_only() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "pub-owner@test.com").await;
-    let (other_id, _) = register_user(&app, "pub-other@test.com").await;
+    let (_seller_id, token) = register_user(&app, "pub-owner@test.com").await;
+    let (_other_id, other_token) = register_user(&app, "pub-other@test.com").await;
     let cid = first_category_id(&app).await;
-    let created = create_listing(&app, "Secret", &cid, seller_id).await;
+    let created = create_listing(&app, "Secret", &cid, &token).await;
     let listing_id = created["id"].as_str().unwrap().to_string();
 
     let resp = app
@@ -408,7 +408,7 @@ async fn test_publish_listing_owner_only() {
             axum::http::Request::builder()
                 .method("POST")
                 .uri(&format!("/api/listings/{}/publish", listing_id))
-                .header("x-seller-id", other_id.to_string())
+                .header("Authorization", format!("Bearer {}", other_token))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -424,12 +424,12 @@ async fn test_publish_listing_owner_only() {
 async fn test_publish_and_list_active() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "publish@test.com").await;
+    let (_seller_id, token) = register_user(&app, "publish@test.com").await;
     let cid = first_category_id(&app).await;
-    let created = create_listing(&app, "Publishable Item", &cid, seller_id).await;
+    let created = create_listing(&app, "Publishable Item", &cid, &token).await;
     let listing_id = created["id"].as_str().unwrap().to_string();
 
-    publish_listing(&app, &listing_id, seller_id).await;
+    publish_listing(&app, &listing_id, &token).await;
 
     let resp = app
         .clone()
@@ -454,18 +454,18 @@ async fn test_publish_and_list_active() {
 async fn test_pause_listing() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "pause@test.com").await;
+    let (_seller_id, token) = register_user(&app, "pause@test.com").await;
     let cid = first_category_id(&app).await;
-    let created = create_listing(&app, "Pausable", &cid, seller_id).await;
+    let created = create_listing(&app, "Pausable", &cid, &token).await;
     let listing_id = created["id"].as_str().unwrap().to_string();
-    publish_listing(&app, &listing_id, seller_id).await;
+    publish_listing(&app, &listing_id, &token).await;
 
     app.clone()
         .oneshot(
             axum::http::Request::builder()
                 .method("POST")
                 .uri(&format!("/api/listings/{}/pause", listing_id))
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -494,9 +494,9 @@ async fn test_pause_listing() {
 async fn test_delete_listing() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "delete@test.com").await;
+    let (_seller_id, token) = register_user(&app, "delete@test.com").await;
     let cid = first_category_id(&app).await;
-    let created = create_listing(&app, "To Delete", &cid, seller_id).await;
+    let created = create_listing(&app, "To Delete", &cid, &token).await;
     let listing_id = created["id"].as_str().unwrap().to_string();
 
     let resp = app
@@ -505,7 +505,7 @@ async fn test_delete_listing() {
             axum::http::Request::builder()
                 .method("DELETE")
                 .uri(&format!("/api/listings/{}", listing_id))
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -533,11 +533,11 @@ async fn test_delete_listing() {
 async fn test_seller_listings() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "seller@test.com").await;
+    let (_seller_id, token) = register_user(&app, "seller@test.com").await;
     let cid = first_category_id(&app).await;
 
     for i in 0..3 {
-        create_listing(&app, &format!("Item {}", i), &cid, seller_id).await;
+        create_listing(&app, &format!("Item {}", i), &cid, &token).await;
     }
 
     let resp = app
@@ -546,7 +546,7 @@ async fn test_seller_listings() {
             axum::http::Request::builder()
                 .method("GET")
                 .uri("/api/listings/mine")
-                .header("x-seller-id", seller_id.to_string())
+                .header("Authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -585,13 +585,13 @@ async fn test_seller_listings_requires_auth() {
 async fn test_listings_pagination() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "pagination@test.com").await;
+    let (_seller_id, token) = register_user(&app, "pagination@test.com").await;
     let cid = first_category_id(&app).await;
 
     for i in 0..5 {
-        let created = create_listing(&app, &format!("Paginated {}", i), &cid, seller_id).await;
+        let created = create_listing(&app, &format!("Paginated {}", i), &cid, &token).await;
         let lid = created["id"].as_str().unwrap().to_string();
-        publish_listing(&app, &lid, seller_id).await;
+        publish_listing(&app, &lid, &token).await;
     }
 
     let resp = app
@@ -639,13 +639,13 @@ async fn test_listings_pagination() {
 async fn test_search_listings() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "search@test.com").await;
+    let (_seller_id, token) = register_user(&app, "search@test.com").await;
     let cid = first_category_id(&app).await;
 
     for title in &["Red Pottery", "Blue Pottery", "Wooden Bowl"] {
-        let created = create_listing(&app, title, &cid, seller_id).await;
+        let created = create_listing(&app, title, &cid, &token).await;
         let lid = created["id"].as_str().unwrap().to_string();
-        publish_listing(&app, &lid, seller_id).await;
+        publish_listing(&app, &lid, &token).await;
     }
 
     let resp = app
@@ -670,7 +670,7 @@ async fn test_search_listings() {
 async fn test_sort_by_price() {
     let docker = Cli::default();
     let (_container, app) = setup(&docker).await;
-    let (seller_id, _) = register_user(&app, "sort@test.com").await;
+    let (_seller_id, token) = register_user(&app, "sort@test.com").await;
     let cid = first_category_id(&app).await;
 
     let prices = [500, 1500, 3000];
@@ -692,7 +692,7 @@ async fn test_sort_by_price() {
                     .method("POST")
                     .uri("/api/listings")
                     .header("content-type", "application/json")
-                    .header("x-seller-id", seller_id.to_string())
+                    .header("Authorization", format!("Bearer {}", token))
                     .body(Body::from(body))
                     .unwrap(),
             )
@@ -704,7 +704,7 @@ async fn test_sort_by_price() {
             .unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let lid = created["id"].as_str().unwrap().to_string();
-        publish_listing(&app, &lid, seller_id).await;
+        publish_listing(&app, &lid, &token).await;
     }
 
     let resp = app
