@@ -1,4 +1,7 @@
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
 use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Tokens {
@@ -24,4 +27,23 @@ pub struct OidcConfig {
     pub userinfo_endpoint: String,
     pub revocation_endpoint: String,
     pub jwks_uri: String,
+}
+
+#[derive(Queryable, Selectable, Clone, Debug)]
+#[diesel(table_name = crate::schema::password_resets)]
+pub struct PasswordReset {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub token_hash: String,
+    pub expires_at: NaiveDateTime,
+    pub used_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::schema::password_resets)]
+pub struct NewPasswordReset {
+    pub user_id: Uuid,
+    pub token_hash: String,
+    pub expires_at: NaiveDateTime,
 }

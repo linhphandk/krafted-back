@@ -2,6 +2,7 @@ pub mod controller;
 pub mod models;
 pub mod ports;
 pub mod provider;
+pub mod repository;
 pub mod service;
 
 use crate::shared::middleware::auth_middleware;
