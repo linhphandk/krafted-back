@@ -21,6 +21,7 @@ pub trait ImageStorage: Send + Sync {
 #[derive(Clone)]
 pub struct S3ImageStorage {
     client: Client,
+    endpoint_url: Option<String>,
 }
 
 impl S3ImageStorage {
@@ -30,7 +31,7 @@ impl S3ImageStorage {
         credentials: Option<Credentials>,
     ) -> Self {
         let loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
-        let loader = match endpoint {
+        let loader = match &endpoint {
             Some(url) => loader.endpoint_url(url),
             None => loader,
         };
@@ -47,7 +48,7 @@ impl S3ImageStorage {
             .force_path_style(true)
             .build();
         let client = Client::from_conf(s3_config);
-        Self { client }
+        Self { client, endpoint_url: endpoint }
     }
 }
 
@@ -75,7 +76,14 @@ impl ImageStorage for S3ImageStorage {
                 AppError::Internal
             })?;
 
-        let url = format!("{}/{}", bucket, key);
+        let url = match &self.endpoint_url {
+            Some(endpoint) => format!(
+                "{}/{}",
+                endpoint.trim_end_matches('/'),
+                format!("{}/{}", bucket, key)
+            ),
+            None => format!("{}/{}", bucket, key),
+        };
         Ok(url)
     }
 
