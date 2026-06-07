@@ -62,12 +62,12 @@ impl AppState {
             image_storage,
             listing_repo.clone(),
             bucket,
-            s3_public_url,
+            s3_public_url.clone(),
         );
         let category_service = CategoryService::new(category_repo);
 
         let favorite_repo = DieselFavoriteRepository::new(pool);
-        let favorites_service = FavoritesService::new(favorite_repo, listing_repo);
+        let favorites_service = FavoritesService::new(favorite_repo, listing_repo, s3_public_url);
 
         let user_service = UserService::new(user_repo);
 
