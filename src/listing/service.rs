@@ -59,7 +59,10 @@ impl<L: ListingRepository, C: CategoryRepository> ListingService<L, C> {
             description: req.description,
             price_cents: req.price_cents,
             category_id: req.category_id,
-            status: "draft".to_string(),
+            status: req
+                .status
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "draft".to_string()),
             condition: req.condition.to_string(),
             quantity: req.quantity.unwrap_or(1),
         };
@@ -426,7 +429,7 @@ impl<R: ListingImageRepository, S: ImageStorage, L: ListingRepository>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::listing::models::{ListingCondition, ListingImage, PaginatedResult};
+    use crate::listing::models::{ListingCondition, ListingImage, ListingStatus, PaginatedResult};
     use async_trait::async_trait;
     use chrono::NaiveDateTime;
     use mockall::mock;
@@ -506,6 +509,7 @@ mod tests {
             category_id: Uuid::new_v4(),
             condition: ListingCondition::Handmade,
             quantity: Some(1),
+            status: None,
         };
 
         let result = service.create_listing(Uuid::new_v4(), req).await;
@@ -525,6 +529,7 @@ mod tests {
             category_id: Uuid::new_v4(),
             condition: ListingCondition::Handmade,
             quantity: Some(1),
+            status: None,
         };
 
         let result = service.create_listing(Uuid::new_v4(), req).await;
@@ -551,6 +556,7 @@ mod tests {
             category_id: cat_id,
             condition: ListingCondition::Handmade,
             quantity: Some(1),
+            status: None,
         };
 
         let result = service.create_listing(Uuid::new_v4(), req).await;
@@ -586,6 +592,43 @@ mod tests {
             category_id: Uuid::new_v4(),
             condition: ListingCondition::Handmade,
             quantity: None,
+            status: None,
+        };
+
+        let result = service.create_listing(seller_id, req).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_listing_with_active_status() {
+        let mut listing_repo = MockListingRepoMock::new();
+        let mut category_repo = MockCategoryRepoMock::new();
+        let cat_id = Uuid::new_v4();
+
+        category_repo
+            .expect_find_by_id()
+            .return_once(move |_| Ok(Some(dummy_category(cat_id))));
+
+        let expected_seller = Uuid::new_v4();
+        let listing_id = Uuid::new_v4();
+        listing_repo
+            .expect_create()
+            .withf(move |nl: &NewListing| {
+                nl.seller_id == expected_seller && nl.status == "active" && nl.quantity == 1
+            })
+            .return_once(move |_| Ok(dummy_listing(listing_id, expected_seller)));
+
+        let service = service_with_mocks(listing_repo, category_repo);
+        let seller_id = expected_seller;
+
+        let req = CreateListingRequest {
+            title: "Active Item".to_string(),
+            description: "".to_string(),
+            price_cents: 2000,
+            category_id: Uuid::new_v4(),
+            condition: ListingCondition::New,
+            quantity: None,
+            status: Some(ListingStatus::Active),
         };
 
         let result = service.create_listing(seller_id, req).await;

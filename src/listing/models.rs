@@ -224,6 +224,7 @@ pub struct CreateListingRequest {
     pub category_id: Uuid,
     pub condition: ListingCondition,
     pub quantity: Option<i32>,
+    pub status: Option<ListingStatus>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, ToSchema)]
