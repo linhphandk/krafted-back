@@ -12,6 +12,13 @@ pub struct Config {
     pub s3_region: String,
     pub s3_endpoint: Option<String>,
     pub s3_public_url: Option<String>,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_user: String,
+    pub smtp_password: String,
+    pub smtp_from_email: String,
+    pub smtp_from_name: String,
+    pub frontend_url: String,
 }
 
 impl Config {
