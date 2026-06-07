@@ -1,4 +1,5 @@
 pub mod controller;
+pub mod email;
 pub mod models;
 pub mod ports;
 pub mod provider;

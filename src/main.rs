@@ -35,6 +35,12 @@ async fn main() {
         image_storage,
         config.s3_bucket,
         config.s3_public_url,
+        config.smtp_host,
+        config.smtp_port,
+        config.smtp_user,
+        config.smtp_password,
+        config.smtp_from_email,
+        config.smtp_from_name,
     );
     let app = create_router(state);
 

@@ -58,6 +58,14 @@ services:
       echo 'Bucket created successfully'
       "
 
+  maildev:
+    image: maildev/maildev:latest
+    container_name: maildev
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "1080:1080"
+
 volumes:
   pgdata:
   minio_data:

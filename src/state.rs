@@ -1,3 +1,4 @@
+use crate::auth::email::SmtpEmailProvider;
 use crate::auth::provider::LocalAuthProvider;
 use crate::favorites::repository::DieselFavoriteRepository;
 use crate::favorites::service::FavoritesService;
@@ -27,6 +28,7 @@ pub struct AppState {
     pub category_service: CategoryService<DieselCategoryRepository>,
     pub user_service: UserService<DieselUserRepository>,
     pub favorites_service: FavoritesService<DieselFavoriteRepository, DieselListingRepository>,
+    pub email_provider: SmtpEmailProvider,
 }
 
 impl AppState {
@@ -37,6 +39,12 @@ impl AppState {
         image_storage: S3ImageStorage,
         bucket: String,
         s3_public_url: Option<String>,
+        smtp_host: String,
+        smtp_port: u16,
+        smtp_user: String,
+        smtp_password: String,
+        smtp_from_email: String,
+        smtp_from_name: String,
     ) -> Self {
         let auth_provider = LocalAuthProvider::new(jwt_secret.clone(), jwt_expiry_minutes);
         let user_repo = DieselUserRepository::new(pool.clone());
@@ -67,9 +75,19 @@ impl AppState {
         let category_service = CategoryService::new(category_repo);
 
         let favorite_repo = DieselFavoriteRepository::new(pool);
-        let favorites_service = FavoritesService::new(favorite_repo, listing_repo, s3_public_url);
+        let favorites_service =
+            FavoritesService::new(favorite_repo, listing_repo, s3_public_url);
 
         let user_service = UserService::new(user_repo);
+
+        let email_provider = SmtpEmailProvider::new(
+            &smtp_host,
+            smtp_port,
+            &smtp_user,
+            &smtp_password,
+            &smtp_from_email,
+            &smtp_from_name,
+        );
 
         Self {
             auth_service,
@@ -78,6 +96,7 @@ impl AppState {
             category_service,
             user_service,
             favorites_service,
+            email_provider,
         }
     }
 }
