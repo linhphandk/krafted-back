@@ -8,7 +8,7 @@ use tracing::{info, instrument, warn};
 use crate::shared::errors::{AppError, AppResult};
 
 #[async_trait]
-pub trait EmailProvider: Send + Sync + Clone {
+pub trait EmailProvider: Send + Sync {
     async fn send_password_reset(&self, to: &str, reset_url: &str) -> AppResult<()>;
 }
 
