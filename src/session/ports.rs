@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::session::models::{NewSession, Session};
 use crate::shared::errors::AppResult;
@@ -8,4 +9,5 @@ pub trait SessionRepository: Send + Sync {
     async fn create(&self, session: NewSession) -> AppResult<Session>;
     async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>>;
     async fn revoke(&self, token: &str) -> AppResult<()>;
+    async fn revoke_all_for_user(&self, user_id: Uuid) -> AppResult<()>;
 }
