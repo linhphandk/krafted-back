@@ -136,3 +136,105 @@ async fn test_revoke_session() {
     let found = session_repo.find_by_token("revoke-me").await.unwrap();
     assert!(found.is_none());
 }
+
+#[tokio::test]
+async fn test_revoke_all_for_user() {
+    let docker = Cli::default();
+    let (_container, user_repo, session_repo) = setup(&docker);
+
+    let user = user_repo
+        .create(NewUser {
+            email: "revoke-all@example.com".to_string(),
+            name: "Revoke All".to_string(),
+            password_hash: String::new(),
+        })
+        .await
+        .unwrap();
+
+    let expires_at = Utc::now()
+        .checked_add_signed(Duration::days(7))
+        .unwrap()
+        .naive_utc();
+
+    session_repo
+        .create(NewSession {
+            user_id: user.id,
+            refresh_token: "token-1".to_string(),
+            expires_at,
+        })
+        .await
+        .unwrap();
+    session_repo
+        .create(NewSession {
+            user_id: user.id,
+            refresh_token: "token-2".to_string(),
+            expires_at,
+        })
+        .await
+        .unwrap();
+    session_repo
+        .create(NewSession {
+            user_id: user.id,
+            refresh_token: "token-3".to_string(),
+            expires_at,
+        })
+        .await
+        .unwrap();
+
+    session_repo.revoke_all_for_user(user.id).await.unwrap();
+
+    assert!(session_repo.find_by_token("token-1").await.unwrap().is_none());
+    assert!(session_repo.find_by_token("token-2").await.unwrap().is_none());
+    assert!(session_repo.find_by_token("token-3").await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_revoke_all_for_user_only_affects_target() {
+    let docker = Cli::default();
+    let (_container, user_repo, session_repo) = setup(&docker);
+
+    let user_a = user_repo
+        .create(NewUser {
+            email: "user-a@example.com".to_string(),
+            name: "User A".to_string(),
+            password_hash: String::new(),
+        })
+        .await
+        .unwrap();
+
+    let user_b = user_repo
+        .create(NewUser {
+            email: "user-b@example.com".to_string(),
+            name: "User B".to_string(),
+            password_hash: String::new(),
+        })
+        .await
+        .unwrap();
+
+    let expires_at = Utc::now()
+        .checked_add_signed(Duration::days(7))
+        .unwrap()
+        .naive_utc();
+
+    session_repo
+        .create(NewSession {
+            user_id: user_a.id,
+            refresh_token: "a-token".to_string(),
+            expires_at,
+        })
+        .await
+        .unwrap();
+    session_repo
+        .create(NewSession {
+            user_id: user_b.id,
+            refresh_token: "b-token".to_string(),
+            expires_at,
+        })
+        .await
+        .unwrap();
+
+    session_repo.revoke_all_for_user(user_a.id).await.unwrap();
+
+    assert!(session_repo.find_by_token("a-token").await.unwrap().is_none());
+    assert!(session_repo.find_by_token("b-token").await.unwrap().is_some());
+}

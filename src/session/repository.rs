@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 use tracing::{debug, instrument};
+use uuid::Uuid;
 
 use crate::schema::sessions;
 use crate::session::models::{NewSession, Session};
@@ -65,6 +66,22 @@ impl SessionRepository for DieselSessionRepository {
             .execute(&mut conn)
             .map_err(|e| {
                 tracing::error!("Failed to revoke session: {:?}", e);
+                AppError::Internal
+            })?;
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn revoke_all_for_user(&self, user_id: Uuid) -> AppResult<()> {
+        debug!("revoke_all_for_user");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+            .execute(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Failed to revoke all sessions for user: {:?}", e);
                 AppError::Internal
             })?;
         Ok(())
