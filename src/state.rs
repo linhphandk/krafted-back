@@ -1,5 +1,6 @@
 use crate::auth::email::SmtpEmailProvider;
 use crate::auth::provider::LocalAuthProvider;
+use crate::auth::repository::DieselPasswordResetRepository;
 use crate::favorites::repository::DieselFavoriteRepository;
 use crate::favorites::service::FavoritesService;
 use crate::listing::repository::{
@@ -21,6 +22,8 @@ pub struct AppState {
         LocalAuthProvider,
         DieselUserRepository,
         DieselSessionRepository,
+        DieselPasswordResetRepository,
+        SmtpEmailProvider,
     >,
     pub listing_service: ListingService<DieselListingRepository, DieselCategoryRepository>,
     pub listing_image_service:
@@ -50,14 +53,27 @@ impl AppState {
         let user_repo = DieselUserRepository::new(pool.clone());
         let user_repo_for_auth = user_repo.clone();
         let session_repo = DieselSessionRepository::new(pool.clone());
+        let password_reset_repo = DieselPasswordResetRepository::new(pool.clone());
         let rbac_repo = DieselRbacRepository::new(pool.clone());
         let rbac_service = Arc::new(RbacService::new(Arc::new(rbac_repo)));
+        let frontend_url = String::from("http://localhost:3000");
+        let email_provider = SmtpEmailProvider::new(
+            &smtp_host,
+            smtp_port,
+            &smtp_user,
+            &smtp_password,
+            &smtp_from_email,
+            &smtp_from_name,
+        );
         let auth_service = crate::auth::service::AuthService::new(
             auth_provider,
             user_repo_for_auth,
             session_repo,
+            password_reset_repo,
+            email_provider.clone(),
             7,
             rbac_service,
+            frontend_url,
         );
 
         let category_repo = DieselCategoryRepository::new(pool.clone());
@@ -79,15 +95,6 @@ impl AppState {
             FavoritesService::new(favorite_repo, listing_repo, s3_public_url);
 
         let user_service = UserService::new(user_repo);
-
-        let email_provider = SmtpEmailProvider::new(
-            &smtp_host,
-            smtp_port,
-            &smtp_user,
-            &smtp_password,
-            &smtp_from_email,
-            &smtp_from_name,
-        );
 
         Self {
             auth_service,
