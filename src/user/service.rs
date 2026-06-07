@@ -64,4 +64,10 @@ impl<R: UserRepository> UserService<R> {
 
         self.repo.update(id, data).await
     }
+
+    #[instrument(skip(self), fields(user_id = %id))]
+    pub async fn update_password_hash(&self, id: Uuid, password_hash: String) -> AppResult<()> {
+        debug!(user_id = %id, "update_password_hash");
+        self.repo.update_password_hash(id, password_hash).await
+    }
 }

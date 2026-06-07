@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use krafted_back::auth::models::{Tokens, UserInfo};
-use krafted_back::auth::ports::AuthProvider;
+use krafted_back::auth::email::EmailProvider;
+use krafted_back::auth::models::{NewPasswordReset, PasswordReset, Tokens, UserInfo};
+use krafted_back::auth::ports::{AuthProvider, PasswordResetRepository};
 use krafted_back::auth::service::AuthService;
 use krafted_back::rbac::models::Role;
 use krafted_back::rbac::ports::RbacRepository;
@@ -12,6 +13,7 @@ use krafted_back::shared::errors::{AppError, AppResult};
 use krafted_back::user::models::{NewUser, User};
 use krafted_back::user::ports::UserRepository;
 use mockall::mock;
+use sha2::Digest;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -39,6 +41,7 @@ mock! {
         async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
         async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>>;
         async fn update(&self, id: Uuid, data: krafted_back::user::models::UpdateUser) -> AppResult<User>;
+        async fn update_password_hash(&self, id: Uuid, password_hash: String) -> AppResult<()>;
     }
 }
 
@@ -50,6 +53,7 @@ mock! {
         async fn create(&self, session: NewSession) -> AppResult<Session>;
         async fn find_by_token(&self, token: &str) -> AppResult<Option<Session>>;
         async fn revoke(&self, token: &str) -> AppResult<()>;
+        async fn revoke_all_for_user(&self, user_id: Uuid) -> AppResult<()>;
     }
 }
 
@@ -62,6 +66,26 @@ mock! {
         async fn assign_role(&self, user_id: Uuid, role_id: Uuid) -> AppResult<()>;
         async fn get_user_role_ids(&self, user_id: Uuid) -> AppResult<Vec<Uuid>>;
         async fn get_permission_names_by_role_ids(&self, role_ids: &[Uuid]) -> AppResult<Vec<String>>;
+    }
+}
+
+mock! {
+    pub MockPasswordResetRepo {}
+
+    #[async_trait]
+    impl PasswordResetRepository for MockPasswordResetRepo {
+        async fn create(&self, reset: NewPasswordReset) -> AppResult<PasswordReset>;
+        async fn find_by_token_hash(&self, token_hash: &str) -> AppResult<Option<PasswordReset>>;
+        async fn mark_used(&self, id: Uuid) -> AppResult<()>;
+    }
+}
+
+mock! {
+    pub MockEmailProvider {}
+
+    #[async_trait]
+    impl EmailProvider for MockEmailProvider {
+        async fn send_password_reset(&self, to: &str, reset_url: &str) -> AppResult<()>;
     }
 }
 
@@ -128,13 +152,16 @@ fn fake_rbac_service() -> Arc<RbacService> {
     Arc::new(RbacService::new(Arc::new(mock_repo)))
 }
 
-fn new_service() -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo> {
+fn new_service() -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo, MockMockPasswordResetRepo, MockMockEmailProvider> {
     AuthService::new(
         MockMockAuthProvider::new(),
         MockMockUserRepo::new(),
         MockMockSessionRepo::new(),
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     )
 }
 
@@ -142,8 +169,10 @@ fn new_service_with_mocks(
     auth: MockMockAuthProvider,
     user: MockMockUserRepo,
     session: MockMockSessionRepo,
-) -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo> {
-    AuthService::new(auth, user, session, 7, fake_rbac_service())
+    password_reset: MockMockPasswordResetRepo,
+    email: MockMockEmailProvider,
+) -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo, MockMockPasswordResetRepo, MockMockEmailProvider> {
+    AuthService::new(auth, user, session, password_reset, email, 7, fake_rbac_service(), "http://localhost:3000".to_string())
 }
 
 #[tokio::test]
@@ -160,8 +189,11 @@ async fn test_register_success() {
         mock_auth,
         mock_repo,
         MockMockSessionRepo::new(),
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service
         .register(
@@ -229,7 +261,7 @@ async fn test_login_success() {
         .expect_create()
         .returning(|_| Ok(fake_session()));
 
-    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7, fake_rbac_service());
+    let service = AuthService::new(mock_auth, mock_repo, mock_session, MockMockPasswordResetRepo::new(), MockMockEmailProvider::new(), 7, fake_rbac_service(), "http://localhost:3000".to_string());
     let result = service
         .login("test@example.com".to_string(), "password123".to_string())
         .await;
@@ -248,8 +280,11 @@ async fn test_login_user_not_found() {
         MockMockAuthProvider::new(),
         mock_repo,
         MockMockSessionRepo::new(),
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service
         .login("nope@example.com".to_string(), "password123".to_string())
@@ -266,8 +301,11 @@ async fn test_logout_success() {
         MockMockAuthProvider::new(),
         MockMockUserRepo::new(),
         mock_session,
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service.logout("test-refresh".to_string()).await;
     assert!(result.is_ok());
@@ -300,7 +338,7 @@ async fn test_refresh_token_success() {
         .expect_create()
         .returning(|_| Ok(fake_session()));
 
-    let service = AuthService::new(mock_auth, mock_repo, mock_session, 7, fake_rbac_service());
+    let service = AuthService::new(mock_auth, mock_repo, mock_session, MockMockPasswordResetRepo::new(), MockMockEmailProvider::new(), 7, fake_rbac_service(), "http://localhost:3000".to_string());
     let result = service.refresh_token("old-refresh".to_string()).await;
     assert!(result.is_ok());
     let (user, tokens) = result.unwrap();
@@ -318,8 +356,11 @@ async fn test_refresh_token_invalid() {
         MockMockAuthProvider::new(),
         MockMockUserRepo::new(),
         mock_session,
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service.refresh_token("bad".to_string()).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
@@ -342,8 +383,11 @@ async fn test_refresh_token_expired() {
         MockMockAuthProvider::new(),
         MockMockUserRepo::new(),
         mock_session,
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service.refresh_token("expired".to_string()).await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
@@ -365,8 +409,11 @@ async fn test_get_current_user_success() {
         mock_auth,
         mock_repo,
         MockMockSessionRepo::new(),
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service.get_current_user("valid-jwt".to_string()).await;
     assert!(result.is_ok());
@@ -384,9 +431,253 @@ async fn test_get_current_user_invalid_token() {
         mock_auth,
         MockMockUserRepo::new(),
         MockMockSessionRepo::new(),
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
         7,
         fake_rbac_service(),
+        "http://localhost:3000".to_string(),
     );
     let result = service.get_current_user("bad".to_string()).await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_forgot_password_sends_email_if_user_exists() {
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo
+        .expect_find_by_email()
+        .returning(|_| Ok(Some(fake_user())));
+
+    let mut mock_password_reset = MockMockPasswordResetRepo::new();
+    mock_password_reset
+        .expect_create()
+        .returning(|_| {
+            Ok(PasswordReset {
+                id: Uuid::new_v4(),
+                user_id: Uuid::new_v4(),
+                token_hash: "hash".to_string(),
+                expires_at: chrono::Utc::now().naive_utc(),
+                used_at: None,
+                created_at: chrono::Utc::now().naive_utc(),
+            })
+        });
+
+    let mut mock_email = MockMockEmailProvider::new();
+    mock_email
+        .expect_send_password_reset()
+        .returning(|_, _| Ok(()));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        mock_repo,
+        MockMockSessionRepo::new(),
+        mock_password_reset,
+        mock_email,
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .forgot_password("test@example.com".to_string())
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_forgot_password_silent_if_user_not_found() {
+    let mut mock_repo = MockMockUserRepo::new();
+    mock_repo
+        .expect_find_by_email()
+        .returning(|_| Ok(None));
+
+    let mock_password_reset = MockMockPasswordResetRepo::new();
+    let mock_email = MockMockEmailProvider::new();
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        mock_repo,
+        MockMockSessionRepo::new(),
+        mock_password_reset,
+        mock_email,
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .forgot_password("nonexistent@example.com".to_string())
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_reset_password_success() {
+    let token_hash = format!("{:x}", sha2::Sha256::digest(b"valid-token"));
+    let user_id = Uuid::new_v4();
+    let reset_id = Uuid::new_v4();
+
+    let mut mock_password_reset = MockMockPasswordResetRepo::new();
+    mock_password_reset
+        .expect_find_by_token_hash()
+        .with(mockall::predicate::eq(token_hash.clone()))
+        .returning(move |_| {
+            Ok(Some(PasswordReset {
+                id: reset_id,
+                user_id,
+                token_hash: token_hash.clone(),
+                expires_at: chrono::Utc::now()
+                    .checked_add_signed(chrono::Duration::minutes(30))
+                    .unwrap()
+                    .naive_utc(),
+                used_at: None,
+                created_at: chrono::Utc::now().naive_utc(),
+            }))
+        });
+    mock_password_reset
+        .expect_mark_used()
+        .with(mockall::predicate::eq(reset_id))
+        .returning(|_| Ok(()));
+
+    let mut mock_user_repo = MockMockUserRepo::new();
+    mock_user_repo
+        .expect_update_password_hash()
+        .returning(|_, _| Ok(()));
+
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session
+        .expect_revoke_all_for_user()
+        .with(mockall::predicate::eq(user_id))
+        .returning(|_| Ok(()));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        mock_user_repo,
+        mock_session,
+        mock_password_reset,
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .reset_password("valid-token".to_string(), "newpassword123".to_string())
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_reset_password_invalid_token() {
+    let mut mock_password_reset = MockMockPasswordResetRepo::new();
+    mock_password_reset
+        .expect_find_by_token_hash()
+        .returning(|_| Ok(None));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        MockMockSessionRepo::new(),
+        mock_password_reset,
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .reset_password("invalid-token".to_string(), "newpassword123".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_reset_password_expired_token() {
+    let user_id = Uuid::new_v4();
+    let mut mock_password_reset = MockMockPasswordResetRepo::new();
+    mock_password_reset
+        .expect_find_by_token_hash()
+        .returning(move |_| {
+            Ok(Some(PasswordReset {
+                id: Uuid::new_v4(),
+                user_id,
+                token_hash: "hash".to_string(),
+                expires_at: chrono::Utc::now()
+                    .checked_sub_signed(chrono::Duration::hours(1))
+                    .unwrap()
+                    .naive_utc(),
+                used_at: None,
+                created_at: chrono::Utc::now().naive_utc(),
+            }))
+        });
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        MockMockSessionRepo::new(),
+        mock_password_reset,
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .reset_password("expired-token".to_string(), "newpassword123".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_reset_password_token_already_used_revokes_sessions() {
+    let user_id = Uuid::new_v4();
+    let mut mock_password_reset = MockMockPasswordResetRepo::new();
+    mock_password_reset
+        .expect_find_by_token_hash()
+        .returning(move |_| {
+            Ok(Some(PasswordReset {
+                id: Uuid::new_v4(),
+                user_id,
+                token_hash: "hash".to_string(),
+                expires_at: chrono::Utc::now()
+                    .checked_add_signed(chrono::Duration::minutes(30))
+                    .unwrap()
+                    .naive_utc(),
+                used_at: Some(chrono::Utc::now().naive_utc()),
+                created_at: chrono::Utc::now().naive_utc(),
+            }))
+        });
+
+    let mut mock_session = MockMockSessionRepo::new();
+    mock_session
+        .expect_revoke_all_for_user()
+        .returning(|_| Ok(()));
+
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        mock_session,
+        mock_password_reset,
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .reset_password("used-token".to_string(), "newpassword123".to_string())
+        .await;
+    assert!(matches!(result, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_reset_password_password_too_short() {
+    let service = AuthService::new(
+        MockMockAuthProvider::new(),
+        MockMockUserRepo::new(),
+        MockMockSessionRepo::new(),
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
+    let result = service
+        .reset_password("any-token".to_string(), "short".to_string())
+        .await;
     assert!(matches!(result, Err(AppError::BadRequest(_))));
 }

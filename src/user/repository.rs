@@ -94,4 +94,24 @@ impl UserRepository for DieselUserRepository {
             .get_result::<User>(&mut conn)
             .map_err(|e| map_diesel_error(e, "User"))
     }
+
+    #[instrument(skip(self), fields(user_id = %id))]
+    async fn update_password_hash(&self, id: Uuid, password_hash: String) -> AppResult<()> {
+        debug!(user_id = %id, "update_password_hash");
+        let mut conn = self.pool.get().map_err(|e| {
+            tracing::error!("Connection pool error: {:?}", e);
+            AppError::Internal
+        })?;
+        let affected = diesel::update(users::table.find(id))
+            .set(users::password_hash.eq(password_hash))
+            .execute(&mut conn)
+            .map_err(|e| {
+                tracing::error!("Database error: {:?}", e);
+                AppError::Internal
+            })?;
+        if affected == 0 {
+            return Err(AppError::NotFound("User not found".to_string()));
+        }
+        Ok(())
+    }
 }

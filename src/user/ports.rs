@@ -10,4 +10,5 @@ pub trait UserRepository: Send + Sync {
     async fn find_by_email(&self, email: &str) -> AppResult<Option<User>>;
     async fn find_by_id(&self, id: Uuid) -> AppResult<Option<User>>;
     async fn update(&self, id: Uuid, data: UpdateUser) -> AppResult<User>;
+    async fn update_password_hash(&self, id: Uuid, password_hash: String) -> AppResult<()>;
 }
