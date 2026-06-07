@@ -11,24 +11,11 @@ use crate::shared::errors::{AppError, AppResult};
 pub struct FavoritesService<R, L> {
     repo: R,
     listing_repo: L,
-    public_url: String,
 }
 
 impl<R: FavoriteRepository, L: ListingRepository> FavoritesService<R, L> {
-    pub fn new(repo: R, listing_repo: L, public_url: Option<String>) -> Self {
-        Self {
-            repo,
-            listing_repo,
-            public_url: public_url.unwrap_or_else(|| "http://localhost:9000".to_string()),
-        }
-    }
-
-    fn resolve_url(&self, stored: &str) -> String {
-        if stored.starts_with("http://") || stored.starts_with("https://") {
-            stored.to_string()
-        } else {
-            format!("{}/{}", self.public_url.trim_end_matches('/'), stored)
-        }
+    pub fn new(repo: R, listing_repo: L) -> Self {
+        Self { repo, listing_repo }
     }
 
     #[instrument(skip(self), fields(user_id = %user_id, listing_id = %listing_id))]
@@ -59,17 +46,7 @@ impl<R: FavoriteRepository, L: ListingRepository> FavoritesService<R, L> {
             .await?;
         if let Some(fav) = existing {
             info!(user_id = %user_id, listing_id = %listing_id, "add_favorite: already exists");
-            return Ok(FavoriteResponse {
-                id: fav.id.to_string(),
-                listing_id: fav.listing_id.to_string(),
-                title: listing.title.clone(),
-                price_cents: listing.price_cents,
-                status: listing.status.clone(),
-                image_url: None,
-                seller_id: listing.seller_id.to_string(),
-                seller_name: String::new(),
-                created_at: fav.created_at.to_string(),
-            });
+            return Ok(FavoriteResponse::from_favorite(&fav));
         }
 
         let fav = self
@@ -81,17 +58,7 @@ impl<R: FavoriteRepository, L: ListingRepository> FavoritesService<R, L> {
             .await?;
 
         info!(favorite_id = %fav.id, "favorite added");
-        Ok(FavoriteResponse {
-            id: fav.id.to_string(),
-            listing_id: fav.listing_id.to_string(),
-            title: listing.title,
-            price_cents: listing.price_cents,
-            status: listing.status,
-            image_url: None,
-            seller_id: listing.seller_id.to_string(),
-            seller_name: String::new(),
-            created_at: fav.created_at.to_string(),
-        })
+        Ok(FavoriteResponse::from_favorite(&fav))
     }
 
     #[instrument(skip(self), fields(user_id = %user_id, listing_id = %listing_id))]
@@ -124,24 +91,8 @@ impl<R: FavoriteRepository, L: ListingRepository> FavoritesService<R, L> {
         let items = self.repo.find_by_user(user_id, page, per_page).await?;
         let total = self.repo.count_by_user(user_id).await?;
 
-        let favorites: Vec<FavoriteResponse> = items
-            .iter()
-            .map(|f| FavoriteResponse {
-                id: f.id.to_string(),
-                listing_id: f.listing_id.to_string(),
-                title: f.title.clone(),
-                price_cents: f.price_cents,
-                status: f.status.clone(),
-                image_url: f
-                    .thumbnail_url
-                    .as_ref()
-                    .filter(|u| !u.is_empty())
-                    .map(|u| self.resolve_url(u)),
-                seller_id: f.seller_id.to_string(),
-                seller_name: f.seller_name.clone(),
-                created_at: f.created_at.to_string(),
-            })
-            .collect();
+        let favorites: Vec<FavoriteResponse> =
+            items.iter().map(FavoriteResponse::from_favorite).collect();
 
         Ok(PaginatedResult {
             items: favorites,
@@ -159,7 +110,7 @@ mod tests {
     use chrono::NaiveDateTime;
     use mockall::mock;
 
-    use crate::favorites::models::{Favorite, FavoriteWithListing};
+    use crate::favorites::models::Favorite;
     use crate::listing::models::{Listing, ListingFilters, NewListing, UpdateListing};
 
     mock! {
@@ -168,7 +119,7 @@ mod tests {
         #[async_trait]
         impl FavoriteRepository for FavRepoMock {
             async fn create(&self, favorite: NewFavorite) -> AppResult<Favorite>;
-            async fn find_by_user(&self, user_id: Uuid, page: i64, per_page: i64) -> AppResult<Vec<FavoriteWithListing>>;
+            async fn find_by_user(&self, user_id: Uuid, page: i64, per_page: i64) -> AppResult<Vec<Favorite>>;
             async fn count_by_user(&self, user_id: Uuid) -> AppResult<i64>;
             async fn find_by_user_and_listing(&self, user_id: Uuid, listing_id: Uuid) -> AppResult<Option<Favorite>>;
             async fn delete(&self, id: Uuid) -> AppResult<()>;
@@ -218,32 +169,11 @@ mod tests {
         }
     }
 
-    fn dummy_favorite_with_listing(
-        id: Uuid,
-        user_id: Uuid,
-        listing_id: Uuid,
-        seller_id: Uuid,
-    ) -> FavoriteWithListing {
-        FavoriteWithListing {
-            id,
-            user_id,
-            listing_id,
-            created_at: NaiveDateTime::parse_from_str("2026-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-                .unwrap(),
-            title: "Test Listing".to_string(),
-            price_cents: 1000,
-            status: "active".to_string(),
-            thumbnail_url: None,
-            seller_id,
-            seller_name: "Seller".to_string(),
-        }
-    }
-
     fn service_with_mocks(
         repo: MockFavRepoMock,
         listing_repo: MockListingRepoForFavMock,
     ) -> FavoritesService<MockFavRepoMock, MockListingRepoForFavMock> {
-        FavoritesService::new(repo, listing_repo, None)
+        FavoritesService::new(repo, listing_repo)
     }
 
     #[tokio::test]
@@ -295,10 +225,7 @@ mod tests {
         let service = service_with_mocks(fav_repo, listing_repo);
         let result = service.add_favorite(user_id, listing_id).await;
         assert!(result.is_ok());
-        let fav = result.unwrap();
-        assert_eq!(fav.listing_id, listing_id.to_string());
-        assert_eq!(fav.title, "Test");
-        assert_eq!(fav.price_cents, 1000);
+        assert_eq!(result.unwrap().listing_id, listing_id.to_string());
     }
 
     #[tokio::test]
@@ -326,10 +253,7 @@ mod tests {
         let service = service_with_mocks(fav_repo, listing_repo);
         let result = service.add_favorite(user_id, listing_id).await;
         assert!(result.is_ok());
-        let fav = result.unwrap();
-        assert_eq!(fav.listing_id, listing_id.to_string());
-        assert_eq!(fav.title, "Test");
-        assert_eq!(fav.price_cents, 1000);
+        assert_eq!(result.unwrap().listing_id, listing_id.to_string());
     }
 
     #[tokio::test]
@@ -395,9 +319,8 @@ mod tests {
         let user_id = Uuid::new_v4();
         let listing_id = Uuid::new_v4();
         let fav_id = Uuid::new_v4();
-        let seller_id = Uuid::new_v4();
 
-        let fav = dummy_favorite_with_listing(fav_id, user_id, listing_id, seller_id);
+        let fav = dummy_favorite(fav_id, user_id, listing_id);
         fav_repo
             .expect_find_by_user()
             .return_once(move |_, _, _| Ok(vec![fav]));
@@ -409,10 +332,6 @@ mod tests {
         let paginated = result.unwrap();
         assert_eq!(paginated.items.len(), 1);
         assert_eq!(paginated.items[0].listing_id, listing_id.to_string());
-        assert_eq!(paginated.items[0].title, "Test Listing");
-        assert_eq!(paginated.items[0].price_cents, 1000);
-        assert_eq!(paginated.items[0].seller_id, seller_id.to_string());
-        assert_eq!(paginated.items[0].seller_name, "Seller");
         assert_eq!(paginated.total, 1);
     }
 }

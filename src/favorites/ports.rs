@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::favorites::models::{Favorite, FavoriteWithListing, NewFavorite};
+use crate::favorites::models::{Favorite, NewFavorite};
 use crate::shared::errors::AppResult;
 
 #[async_trait]
@@ -12,7 +12,7 @@ pub trait FavoriteRepository: Send + Sync {
         user_id: Uuid,
         page: i64,
         per_page: i64,
-    ) -> AppResult<Vec<FavoriteWithListing>>;
+    ) -> AppResult<Vec<Favorite>>;
     async fn count_by_user(&self, user_id: Uuid) -> AppResult<i64>;
     async fn find_by_user_and_listing(
         &self,
