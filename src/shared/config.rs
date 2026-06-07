@@ -11,6 +11,7 @@ pub struct Config {
     pub s3_bucket: String,
     pub s3_region: String,
     pub s3_endpoint: Option<String>,
+    pub s3_public_url: Option<String>,
 }
 
 impl Config {

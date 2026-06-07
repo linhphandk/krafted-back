@@ -33,6 +33,7 @@ impl AppState {
         jwt_expiry_minutes: u64,
         image_storage: S3ImageStorage,
         bucket: String,
+        s3_public_url: Option<String>,
     ) -> Self {
         let auth_provider = LocalAuthProvider::new(jwt_secret.clone(), jwt_expiry_minutes);
         let user_repo = DieselUserRepository::new(pool.clone());
@@ -53,8 +54,13 @@ impl AppState {
         let listing_image_repo = DieselListingImageRepository::new(pool.clone());
 
         let listing_service = ListingService::new(listing_repo.clone(), category_repo.clone());
-        let listing_image_service =
-            ListingImageService::new(listing_image_repo, image_storage, listing_repo, bucket);
+        let listing_image_service = ListingImageService::new(
+            listing_image_repo,
+            image_storage,
+            listing_repo,
+            bucket,
+            s3_public_url,
+        );
         let category_service = CategoryService::new(category_repo);
         let user_service = UserService::new(user_repo);
 

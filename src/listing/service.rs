@@ -254,17 +254,33 @@ pub struct ListingImageService<R, S, L> {
     storage: S,
     listing_repo: L,
     bucket: String,
+    public_url: String,
 }
 
 impl<R: ListingImageRepository, S: ImageStorage, L: ListingRepository>
     ListingImageService<R, S, L>
 {
-    pub fn new(repo: R, storage: S, listing_repo: L, bucket: String) -> Self {
+    pub fn new(
+        repo: R,
+        storage: S,
+        listing_repo: L,
+        bucket: String,
+        public_url: Option<String>,
+    ) -> Self {
         Self {
             repo,
             storage,
             listing_repo,
             bucket,
+            public_url: public_url.unwrap_or_else(|| "http://localhost:9000".to_string()),
+        }
+    }
+
+    fn resolve_url(&self, stored: &str) -> String {
+        if stored.starts_with("http://") || stored.starts_with("https://") {
+            stored.to_string()
+        } else {
+            format!("{}/{}", self.public_url.trim_end_matches('/'), stored)
         }
     }
 
@@ -330,7 +346,10 @@ impl<R: ListingImageRepository, S: ImageStorage, L: ListingRepository>
             };
 
             let saved = self.repo.create(new_image).await?;
-            responses.push(ImageResponse::from_image(&saved));
+            let mut resp = ImageResponse::from_image(&saved);
+            resp.url = self.resolve_url(&resp.url);
+            resp.thumbnail_url = self.resolve_url(&resp.thumbnail_url);
+            responses.push(resp);
         }
 
         Ok(responses)
@@ -338,7 +357,15 @@ impl<R: ListingImageRepository, S: ImageStorage, L: ListingRepository>
 
     pub async fn list_images(&self, listing_id: Uuid) -> AppResult<Vec<ImageResponse>> {
         let images = self.repo.find_by_listing(listing_id).await?;
-        Ok(images.iter().map(ImageResponse::from_image).collect())
+        Ok(images
+            .iter()
+            .map(|img| {
+                let mut resp = ImageResponse::from_image(img);
+                resp.url = self.resolve_url(&resp.url);
+                resp.thumbnail_url = self.resolve_url(&resp.thumbnail_url);
+                resp
+            })
+            .collect())
     }
 
     #[instrument(skip(self), fields(listing_id = %listing_id))]
@@ -821,7 +848,13 @@ mod tests {
         crate::shared::image_storage::test::MockImageStorage,
         MockListingRepoMock,
     > {
-        ListingImageService::new(image_repo, storage, listing_repo, "test-bucket".to_string())
+        ListingImageService::new(
+            image_repo,
+            storage,
+            listing_repo,
+            "test-bucket".to_string(),
+            Some("http://minio:9000".to_string()),
+        )
     }
 
     #[tokio::test]
