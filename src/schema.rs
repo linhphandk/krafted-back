@@ -57,6 +57,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    password_resets (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 64]
+        token_hash -> Varchar,
+        expires_at -> Timestamp,
+        used_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     permissions (id) {
         id -> Uuid,
         #[max_length = 100]
@@ -119,6 +131,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(password_resets -> users (user_id));
 diesel::joinable!(favorites -> users (user_id));
 diesel::joinable!(favorites -> listings (listing_id));
 diesel::joinable!(listing_images -> listings (listing_id));
@@ -135,6 +148,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     favorites,
     listing_images,
     listings,
+    password_resets,
     permissions,
     role_permissions,
     roles,

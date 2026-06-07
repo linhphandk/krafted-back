@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use uuid::Uuid;
 
-use crate::auth::models::{Tokens, UserInfo};
+use crate::auth::models::{NewPasswordReset, PasswordReset, Tokens, UserInfo};
 use crate::shared::errors::AppResult;
 
 #[async_trait]
@@ -34,4 +35,11 @@ pub trait AuthProvider: Send + Sync {
     ) -> AppResult<String>;
 
     fn token_expiry_seconds(&self) -> u64;
+}
+
+#[async_trait]
+pub trait PasswordResetRepository: Send + Sync {
+    async fn create(&self, reset: NewPasswordReset) -> AppResult<PasswordReset>;
+    async fn find_by_token_hash(&self, token_hash: &str) -> AppResult<Option<PasswordReset>>;
+    async fn mark_used(&self, id: Uuid) -> AppResult<()>;
 }
