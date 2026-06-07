@@ -5,6 +5,7 @@ use serde::Deserialize;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 
+use crate::auth::models::{ForgotPasswordRequest, ResetPasswordRequest};
 use crate::shared::errors::AppResult;
 use crate::shared::types::AuthenticatedUser;
 use crate::state::AppState;
@@ -244,4 +245,45 @@ pub async fn refresh(
         expires_in: tokens.expires_in,
     };
     Ok((StatusCode::OK, Json(response)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/forgot-password",
+    request_body = ForgotPasswordRequest,
+    responses(
+        (status = 200, description = "Reset email sent if user exists"),
+        (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
+    ),
+    tag = "auth",
+)]
+#[instrument(skip(state, req))]
+pub async fn forgot_password(
+    State(state): State<AppState>,
+    Json(req): Json<ForgotPasswordRequest>,
+) -> AppResult<StatusCode> {
+    state.auth_service.forgot_password(req.email).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/reset-password",
+    request_body = ResetPasswordRequest,
+    responses(
+        (status = 200, description = "Password reset successfully"),
+        (status = 400, description = "Bad request", body = crate::shared::errors::ErrorResponse),
+    ),
+    tag = "auth",
+)]
+#[instrument(skip(state, req))]
+pub async fn reset_password(
+    State(state): State<AppState>,
+    Json(req): Json<ResetPasswordRequest>,
+) -> AppResult<StatusCode> {
+    state
+        .auth_service
+        .reset_password(req.token, req.password)
+        .await?;
+    Ok(StatusCode::OK)
 }

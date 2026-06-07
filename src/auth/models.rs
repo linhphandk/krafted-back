@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::Deserialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -46,4 +47,15 @@ pub struct NewPasswordReset {
     pub user_id: Uuid,
     pub token_hash: String,
     pub expires_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub password: String,
 }
