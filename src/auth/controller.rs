@@ -146,7 +146,7 @@ pub struct UpdateProfileRequest {
 
 #[utoipa::path(
     get,
-    path = "/api/auth/me",
+    path = "/auth/me",
     responses(
         (status = 200, description = "Current user", body = UserResponse),
         (status = 401, description = "Unauthorized"),
@@ -167,7 +167,7 @@ pub async fn me(
 
 #[utoipa::path(
     patch,
-    path = "/api/auth/me",
+    path = "/auth/me",
     request_body = UpdateProfileRequest,
     responses(
         (status = 200, description = "Profile updated", body = UserResponse),
