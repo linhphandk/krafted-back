@@ -1,5 +1,6 @@
 pub mod api_doc;
 pub mod auth;
+pub mod favorites;
 pub mod listing;
 pub mod rbac;
 pub mod router;
