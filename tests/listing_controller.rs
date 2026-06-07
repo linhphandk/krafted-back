@@ -17,7 +17,8 @@ async fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::
     let pool = establish_pool(&db_url, 4);
     run_migrations(&pool);
 
-    let image_storage = S3ImageStorage::new(Some("http://localhost:19000".to_string()), None, None).await;
+    let image_storage =
+        S3ImageStorage::new(Some("http://localhost:19000".to_string()), None, None).await;
     let state = AppState::new(
         pool,
         "test-secret".to_string(),
@@ -745,4 +746,236 @@ async fn test_sort_by_price() {
     let items = result["items"].as_array().unwrap();
     assert_eq!(items[0]["price_cents"], 3000);
     assert_eq!(items[2]["price_cents"], 500);
+}
+
+#[tokio::test]
+async fn test_upload_images_requires_auth() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (seller_id, token) = register_user(&app, "img-auth@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "No Auth Upload", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let boundary = "----testboundary";
+    let mut body_bytes = Vec::new();
+    use std::io::Write;
+    write!(
+        body_bytes,
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n"
+    )
+    .unwrap();
+    write!(body_bytes, "\r\n--{boundary}--\r\n").unwrap();
+
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(&format!("/api/listings/{}/images", listing_id))
+                .header("content-type", &content_type)
+                .body(Body::from(bytes::Bytes::from(body_bytes)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_upload_images_forbidden() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (seller_id, token) = register_user(&app, "img-owner@test.com").await;
+    let (_other_id, other_token) = register_user(&app, "img-other@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "Forbidden Upload", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let boundary = "----testboundary";
+    let mut body_bytes = Vec::new();
+    use std::io::Write;
+    write!(
+        body_bytes,
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n"
+    )
+    .unwrap();
+    write!(body_bytes, "\r\n--{boundary}--\r\n").unwrap();
+
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(&format!("/api/listings/{}/images", listing_id))
+                .header("content-type", &content_type)
+                .header("Authorization", format!("Bearer {}", other_token))
+                .body(Body::from(bytes::Bytes::from(body_bytes)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_upload_images_listing_not_found() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (_seller_id, token) = register_user(&app, "img-404@test.com").await;
+
+    let boundary = "----testboundary";
+    let mut body_bytes = Vec::new();
+    use std::io::Write;
+    write!(
+        body_bytes,
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n"
+    )
+    .unwrap();
+    write!(body_bytes, "\r\n--{boundary}--\r\n").unwrap();
+
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/listings/00000000-0000-0000-0000-000000000000/images")
+                .header("content-type", &content_type)
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::from(bytes::Bytes::from(body_bytes)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_list_images_empty() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (_seller_id, token) = register_user(&app, "img-empty@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "No Images", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(&format!("/api/listings/{}/images", listing_id))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let images: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(images.is_empty());
+}
+
+#[tokio::test]
+async fn test_reorder_images_requires_auth() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (_seller_id, token) = register_user(&app, "img-reorder@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "Reorder Auth", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("PUT")
+                .uri(&format!("/api/listings/{}/images/reorder", listing_id))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&json!({"image_ids": []})).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_delete_image_requires_auth() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (_seller_id, token) = register_user(&app, "img-del@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "Delete Auth", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("DELETE")
+                .uri(&format!(
+                    "/api/listings/{}/images/00000000-0000-0000-0000-000000000000",
+                    listing_id
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_listing_images_in_response() {
+    let docker = Cli::default();
+    let (_container, app) = setup(&docker).await;
+
+    let (_seller_id, token) = register_user(&app, "img-in-response@test.com").await;
+    let cid = first_category_id(&app).await;
+    let created = create_listing(&app, "Images In Response", &cid, &token).await;
+    let listing_id = created["id"].as_str().unwrap().to_string();
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(&format!("/api/listings/{}", listing_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let listing: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(listing.get("images").is_some());
+    assert!(listing["images"].is_array());
 }
