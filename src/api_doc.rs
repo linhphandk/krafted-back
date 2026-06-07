@@ -4,6 +4,7 @@ use crate::auth::controller::{
     LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, RefreshResponse, RegisterRequest,
     UpdateProfileRequest, UserResponse,
 };
+use crate::auth::models::{ForgotPasswordRequest, ResetPasswordRequest};
 use crate::favorites::models::FavoriteResponse;
 use crate::listing::models::{
     Category, CreateListingRequest, ImageResponse, ListingResponse, ListingSort, PaginatedResponse,
@@ -18,6 +19,8 @@ use crate::listing::models::{
         crate::auth::controller::logout,
         crate::auth::controller::refresh,
         crate::auth::controller::me,
+        crate::auth::controller::forgot_password,
+        crate::auth::controller::reset_password,
         crate::auth::controller::update_profile,
         crate::listing::controller::list_listings,
         crate::listing::controller::get_listing,
@@ -46,6 +49,8 @@ use crate::listing::models::{
             RefreshResponse,
             UserResponse,
             UpdateProfileRequest,
+            ForgotPasswordRequest,
+            ResetPasswordRequest,
             CreateListingRequest,
             UpdateListingRequest,
             ListingResponse,
