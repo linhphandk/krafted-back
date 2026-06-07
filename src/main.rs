@@ -34,6 +34,7 @@ async fn main() {
         config.jwt_expiry_minutes,
         image_storage,
         config.s3_bucket,
+        config.s3_public_url,
     );
     let app = create_router(state);
 
