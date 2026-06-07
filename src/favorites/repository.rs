@@ -31,9 +31,18 @@ impl FavoriteRepository for DieselFavoriteRepository {
         diesel::insert_into(favorites::table)
             .values(&favorite)
             .get_result::<Favorite>(&mut conn)
-            .map_err(|e| {
-                tracing::error!("Database error: {:?}", e);
-                AppError::Internal
+            .map_err(|e| match e {
+                diesel::result::Error::DatabaseError(
+                    diesel::result::DatabaseErrorKind::UniqueViolation,
+                    _,
+                ) => {
+                    tracing::warn!("Duplicate favorite: {:?}", e);
+                    AppError::BadRequest("Already favorited".to_string())
+                }
+                _ => {
+                    tracing::error!("Database error: {:?}", e);
+                    AppError::Internal
+                }
             })
     }
 
