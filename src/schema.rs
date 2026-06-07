@@ -33,6 +33,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    favorites (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        listing_id -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     listing_images (id) {
         id -> Uuid,
         listing_id -> Uuid,
@@ -110,6 +119,8 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(favorites -> users (user_id));
+diesel::joinable!(favorites -> listings (listing_id));
 diesel::joinable!(listing_images -> listings (listing_id));
 diesel::joinable!(listings -> categories (category_id));
 diesel::joinable!(listings -> users (seller_id));
@@ -121,6 +132,7 @@ diesel::joinable!(user_roles -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     categories,
+    favorites,
     listing_images,
     listings,
     permissions,
