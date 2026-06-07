@@ -26,5 +26,7 @@ pub fn auth_router(state: &AppState) -> axum::Router<AppState> {
         .route("/auth/login", post(controller::login))
         .route("/auth/logout", post(controller::logout))
         .route("/auth/refresh", post(controller::refresh))
+        .route("/auth/forgot-password", post(controller::forgot_password))
+        .route("/auth/reset-password", post(controller::reset_password))
         .merge(protected)
 }
