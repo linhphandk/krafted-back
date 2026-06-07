@@ -23,6 +23,7 @@ async fn setup(docker: &Cli) -> (testcontainers::Container<'_, Postgres>, axum::
         15,
         image_storage,
         "test-bucket".to_string(),
+        None,
     );
     let app = create_router(state);
     (container, app)

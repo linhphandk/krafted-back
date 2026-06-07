@@ -36,6 +36,7 @@ pub struct LogoutRequest {
 pub struct RegisterResponse {
     pub user: UserResponse,
     pub access_token: String,
+    pub refresh_token: String,
     pub expires_in: u64,
 }
 
@@ -81,6 +82,7 @@ pub async fn register(
             name: user.name,
         },
         access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
         expires_in: tokens.expires_in,
     };
     Ok((StatusCode::OK, Json(response)))

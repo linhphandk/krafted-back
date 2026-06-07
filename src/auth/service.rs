@@ -75,6 +75,29 @@ impl<A: AuthProvider, R: UserRepository, S: SessionRepository> AuthService<A, R,
         let user = self.user_service.create(new_user).await?;
         info!(user_id = %user.id, "user registered");
         self.rbac_service.assign_default_role(user.id).await?;
+
+        let refresh_token = Uuid::new_v4().to_string();
+        let expires_at = Utc::now()
+            .checked_add_signed(Duration::days(self.refresh_token_expiry_days))
+            .ok_or(AppError::Internal)?
+            .naive_utc();
+
+        let session = self
+            .session_repo
+            .create(NewSession {
+                user_id: user.id,
+                refresh_token: refresh_token.clone(),
+                expires_at,
+            })
+            .await?;
+
+        let tokens = Tokens {
+            access_token: tokens.access_token,
+            refresh_token: session.refresh_token,
+            id_token: String::new(),
+            expires_in: tokens.expires_in,
+        };
+
         Ok((user, tokens))
     }
 
