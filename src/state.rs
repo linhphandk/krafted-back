@@ -1,4 +1,6 @@
 use crate::auth::provider::LocalAuthProvider;
+use crate::favorites::repository::DieselFavoriteRepository;
+use crate::favorites::service::FavoritesService;
 use crate::listing::repository::{
     DieselCategoryRepository, DieselListingImageRepository, DieselListingRepository,
 };
@@ -24,6 +26,7 @@ pub struct AppState {
         ListingImageService<DieselListingImageRepository, S3ImageStorage, DieselListingRepository>,
     pub category_service: CategoryService<DieselCategoryRepository>,
     pub user_service: UserService<DieselUserRepository>,
+    pub favorites_service: FavoritesService<DieselFavoriteRepository, DieselListingRepository>,
 }
 
 impl AppState {
@@ -57,11 +60,15 @@ impl AppState {
         let listing_image_service = ListingImageService::new(
             listing_image_repo,
             image_storage,
-            listing_repo,
+            listing_repo.clone(),
             bucket,
             s3_public_url,
         );
         let category_service = CategoryService::new(category_repo);
+
+        let favorite_repo = DieselFavoriteRepository::new(pool);
+        let favorites_service = FavoritesService::new(favorite_repo, listing_repo);
+
         let user_service = UserService::new(user_repo);
 
         Self {
@@ -70,6 +77,7 @@ impl AppState {
             listing_image_service,
             category_service,
             user_service,
+            favorites_service,
         }
     }
 }
