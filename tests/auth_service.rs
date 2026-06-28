@@ -152,7 +152,13 @@ fn fake_rbac_service() -> Arc<RbacService> {
     Arc::new(RbacService::new(Arc::new(mock_repo)))
 }
 
-fn new_service() -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo, MockMockPasswordResetRepo, MockMockEmailProvider> {
+fn new_service() -> AuthService<
+    MockMockAuthProvider,
+    MockMockUserRepo,
+    MockMockSessionRepo,
+    MockMockPasswordResetRepo,
+    MockMockEmailProvider,
+> {
     AuthService::new(
         MockMockAuthProvider::new(),
         MockMockUserRepo::new(),
@@ -171,8 +177,23 @@ fn new_service_with_mocks(
     session: MockMockSessionRepo,
     password_reset: MockMockPasswordResetRepo,
     email: MockMockEmailProvider,
-) -> AuthService<MockMockAuthProvider, MockMockUserRepo, MockMockSessionRepo, MockMockPasswordResetRepo, MockMockEmailProvider> {
-    AuthService::new(auth, user, session, password_reset, email, 7, fake_rbac_service(), "http://localhost:3000".to_string())
+) -> AuthService<
+    MockMockAuthProvider,
+    MockMockUserRepo,
+    MockMockSessionRepo,
+    MockMockPasswordResetRepo,
+    MockMockEmailProvider,
+> {
+    AuthService::new(
+        auth,
+        user,
+        session,
+        password_reset,
+        email,
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    )
 }
 
 #[tokio::test]
@@ -261,7 +282,16 @@ async fn test_login_success() {
         .expect_create()
         .returning(|_| Ok(fake_session()));
 
-    let service = AuthService::new(mock_auth, mock_repo, mock_session, MockMockPasswordResetRepo::new(), MockMockEmailProvider::new(), 7, fake_rbac_service(), "http://localhost:3000".to_string());
+    let service = AuthService::new(
+        mock_auth,
+        mock_repo,
+        mock_session,
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
     let result = service
         .login("test@example.com".to_string(), "password123".to_string())
         .await;
@@ -338,7 +368,16 @@ async fn test_refresh_token_success() {
         .expect_create()
         .returning(|_| Ok(fake_session()));
 
-    let service = AuthService::new(mock_auth, mock_repo, mock_session, MockMockPasswordResetRepo::new(), MockMockEmailProvider::new(), 7, fake_rbac_service(), "http://localhost:3000".to_string());
+    let service = AuthService::new(
+        mock_auth,
+        mock_repo,
+        mock_session,
+        MockMockPasswordResetRepo::new(),
+        MockMockEmailProvider::new(),
+        7,
+        fake_rbac_service(),
+        "http://localhost:3000".to_string(),
+    );
     let result = service.refresh_token("old-refresh".to_string()).await;
     assert!(result.is_ok());
     let (user, tokens) = result.unwrap();
@@ -449,18 +488,16 @@ async fn test_forgot_password_sends_email_if_user_exists() {
         .returning(|_| Ok(Some(fake_user())));
 
     let mut mock_password_reset = MockMockPasswordResetRepo::new();
-    mock_password_reset
-        .expect_create()
-        .returning(|_| {
-            Ok(PasswordReset {
-                id: Uuid::new_v4(),
-                user_id: Uuid::new_v4(),
-                token_hash: "hash".to_string(),
-                expires_at: chrono::Utc::now().naive_utc(),
-                used_at: None,
-                created_at: chrono::Utc::now().naive_utc(),
-            })
-        });
+    mock_password_reset.expect_create().returning(|_| {
+        Ok(PasswordReset {
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            token_hash: "hash".to_string(),
+            expires_at: chrono::Utc::now().naive_utc(),
+            used_at: None,
+            created_at: chrono::Utc::now().naive_utc(),
+        })
+    });
 
     let mut mock_email = MockMockEmailProvider::new();
     mock_email
@@ -486,9 +523,7 @@ async fn test_forgot_password_sends_email_if_user_exists() {
 #[tokio::test]
 async fn test_forgot_password_silent_if_user_not_found() {
     let mut mock_repo = MockMockUserRepo::new();
-    mock_repo
-        .expect_find_by_email()
-        .returning(|_| Ok(None));
+    mock_repo.expect_find_by_email().returning(|_| Ok(None));
 
     let mock_password_reset = MockMockPasswordResetRepo::new();
     let mock_email = MockMockEmailProvider::new();

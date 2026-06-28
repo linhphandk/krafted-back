@@ -33,8 +33,13 @@ pub struct AuthService<
     frontend_url: String,
 }
 
-impl<A: AuthProvider, R: UserRepository, S: SessionRepository, P: PasswordResetRepository, E: EmailProvider>
-    AuthService<A, R, S, P, E>
+impl<
+        A: AuthProvider,
+        R: UserRepository,
+        S: SessionRepository,
+        P: PasswordResetRepository,
+        E: EmailProvider,
+    > AuthService<A, R, S, P, E>
 {
     pub fn new(
         auth_provider: A,

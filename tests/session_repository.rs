@@ -183,9 +183,21 @@ async fn test_revoke_all_for_user() {
 
     session_repo.revoke_all_for_user(user.id).await.unwrap();
 
-    assert!(session_repo.find_by_token("token-1").await.unwrap().is_none());
-    assert!(session_repo.find_by_token("token-2").await.unwrap().is_none());
-    assert!(session_repo.find_by_token("token-3").await.unwrap().is_none());
+    assert!(session_repo
+        .find_by_token("token-1")
+        .await
+        .unwrap()
+        .is_none());
+    assert!(session_repo
+        .find_by_token("token-2")
+        .await
+        .unwrap()
+        .is_none());
+    assert!(session_repo
+        .find_by_token("token-3")
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]
@@ -235,6 +247,14 @@ async fn test_revoke_all_for_user_only_affects_target() {
 
     session_repo.revoke_all_for_user(user_a.id).await.unwrap();
 
-    assert!(session_repo.find_by_token("a-token").await.unwrap().is_none());
-    assert!(session_repo.find_by_token("b-token").await.unwrap().is_some());
+    assert!(session_repo
+        .find_by_token("a-token")
+        .await
+        .unwrap()
+        .is_none());
+    assert!(session_repo
+        .find_by_token("b-token")
+        .await
+        .unwrap()
+        .is_some());
 }

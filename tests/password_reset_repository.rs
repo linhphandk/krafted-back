@@ -89,10 +89,7 @@ async fn test_find_by_token_hash_not_found() {
     let docker = Cli::default();
     let (_container, repo, _user_id) = setup(&docker);
 
-    let found = repo
-        .find_by_token_hash("nonexistent_hash")
-        .await
-        .unwrap();
+    let found = repo.find_by_token_hash("nonexistent_hash").await.unwrap();
     assert!(found.is_none());
 }
 
